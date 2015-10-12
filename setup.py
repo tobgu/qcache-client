@@ -1,0 +1,74 @@
+# -*- encoding: utf-8 -*-
+import glob
+import io
+import re
+import sys
+from os.path import basename
+from os.path import dirname
+from os.path import join
+from os.path import splitext
+from setuptools import setup
+from setuptools.command.test import test as TestCommand
+
+
+class PyTest(TestCommand):
+    def finalize_options(self):
+        TestCommand.finalize_options(self)
+        self.test_args = ['-s']
+        self.test_suite = True
+
+    def run_tests(self):
+        import pytest
+        errcode = pytest.main(self.test_args)
+        sys.exit(errcode)
+
+
+def read(*names, **kwargs):
+    return io.open(
+        join(dirname(__file__), *names),
+        encoding=kwargs.get("encoding", "utf8")
+    ).read()
+
+setup(
+    name="qcache-client",
+    version="0.1.0",
+    license="BSD",
+    description="Python client library for QCache",
+    long_description="%s\n%s" % (read("README.rst"), re.sub(":obj:`~?(.*?)`", r"``\1``", read("CHANGELOG.rst"))),
+    author="Tobias Gustafsson",
+    author_email="tobias.l.gustafsson@gmail.com",
+    url="https://github.com/tobgu/qcache-client",
+    packages=["qclient"],
+    py_modules=[splitext(basename(i))[0] for i in glob.glob("src/*.py")],
+    include_package_data=True,
+    zip_safe=False,
+    classifiers=[
+        # complete classifier list: http://pypi.python.org/pypi?%3Aaction=list_classifiers
+        "Development Status :: 2 - Pre-Alpha",
+        "Intended Audience :: Developers",
+        "License :: OSI Approved :: BSD License",
+        "Operating System :: Unix",
+        "Operating System :: POSIX",
+        "Operating System :: Microsoft :: Windows",
+        "Programming Language :: Python",
+        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.3",
+        "Programming Language :: Python :: 3.4",
+        "Programming Language :: Python :: Implementation :: CPython",
+        "Programming Language :: Python :: Implementation :: PyPy",
+        "Topic :: Utilities",
+    ],
+    keywords=[
+        # eg: "keyword1", "keyword2", "keyword3",
+    ],
+    install_requires=[
+        "requests==2.8.0"
+    ],
+    extras_require={
+        # eg: 'rst': ["docutils>=0.11"],
+    },
+    tests_require=['pytest'],
+    cmdclass={'test': PyTest}
+
+)
