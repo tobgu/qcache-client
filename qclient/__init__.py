@@ -40,7 +40,7 @@ def _node_statisticts():
 
 class QClient(object):
     def __init__(self, node_list, connect_timeout=1.0, read_timeout=2.0):
-        self.node_ring = NodeRing([node + '/' if not node.endswith('/') else node for node in node_list])
+        self.node_ring = NodeRing(node_list)
         self.failing_nodes = deque()
         self.connect_timeout = connect_timeout
         self.read_timeout = read_timeout
@@ -73,12 +73,17 @@ class QClient(object):
             self.statistics[node]['read_timeout'] += 1
             self._drop_node(node)
 
+    @staticmethod
+    def _key_url(node, key):
+        new_node = node if node.endswith('/') else node + '/'
+        return new_node + 'qcache/dataset/' + key
+
     def get(self, key, q, accept='application/json'):
         json_q = json.dumps(q)
 
         while True:
             node = self._node_for_key(key)
-            key_url = node + 'qcache/dataset/' + key
+            key_url = self._key_url(node, key)
             with self.connection_error_manager(node):
                 response = requests.get(key_url, params={'q': json_q}, headers={'Accept': accept})
                 if response.status_code == 200:
@@ -101,7 +106,7 @@ class QClient(object):
 
         while True:
             node = self._node_for_key(key)
-            key_url = node + 'qcache/dataset/' + key
+            key_url = self._key_url(node, key)
 
             with self.connection_error_manager(node):
                 response = requests.post(key_url, headers={'Content-type': content_type}, data=content,

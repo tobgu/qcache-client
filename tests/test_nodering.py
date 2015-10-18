@@ -1,10 +1,11 @@
 from collections import defaultdict
 import random
 import string
+import pytest
 from qclient.node_ring import NodeRing
 
 
-def xtest_distribution():
+def test_distribution():
     strings = [str(i) for i in range(60000)]
     node_weights = {'aaa': 1, 'bbb': 2, 'ccc': 1, 'ddd': 1, 'eee': 1}
 
@@ -49,3 +50,15 @@ def xtest_distribution():
     assert distribution['ccc'] == added_distribution['ccc']
     assert distribution['ddd'] == added_distribution['ddd']
     assert distribution['eee'] == added_distribution['eee']
+
+
+def test_requires_at_least_one_node_at_creation():
+    with pytest.raises(AssertionError):
+        NodeRing([])
+
+
+def test_get_node_no_nodes_available():
+    ring = NodeRing(['12345'])
+    ring.remove_node('12345')
+
+    assert ring.get_node('12345') is None

@@ -2,7 +2,8 @@ import json
 import os
 import signal
 import time
-from qclient import QClient
+import pytest
+from qclient import QClient, NoCacheAvailable
 
 
 def data_source(content):
@@ -33,3 +34,13 @@ def test_basic_query_with_no_prior_data():
     assert result == [{'foo': 'baz', 'bar': 123}, {'foo': 'abc',   'bar': 321}]
 
     kill_servers(pids)
+
+
+def test_no_nodes_available():
+    client = QClient(['http://localhost:2222', 'http://localhost:2223'])
+    with pytest.raises(NoCacheAvailable):
+        client.query('test_key', q=dict(select=['foo', 'bar']), load_fn=data_source,
+                     load_fn_kwargs=dict(content='baz'), content_type='application/json')
+
+    assert client.statistics['http://localhost:2222']['connect_timeout'] == 1
+    assert client.statistics['http://localhost:2223']['connect_timeout'] == 1

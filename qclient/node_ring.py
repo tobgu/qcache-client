@@ -5,6 +5,8 @@ from math import ceil
 
 class NodeRing(object):
     def __init__(self, nodes, weights=None, virtual_count=None):
+        assert nodes
+
         self.ring = {}
         self.sorted_keys = []
         self.weights = weights or {}
@@ -42,6 +44,9 @@ class NodeRing(object):
         self.sorted_keys.sort()
 
     def get_node(self, string_key):
+        if not self.sorted_keys:
+            return None
+
         key = generate_key(string_key)
         pos = bisect(self.sorted_keys, key)
         pos %= len(self.sorted_keys)
