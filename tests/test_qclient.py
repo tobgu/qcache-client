@@ -23,9 +23,9 @@ def kill_servers(pids):
         os.kill(pid, signal.SIGTERM)
 
 
-def test_basic_insert_get_query():
+def test_basic_query_with_no_prior_data():
     pids = spawn_servers(['2222', '2223'])
-    client = QClient(['http://localhost:2222/qcache', 'http://localhost:2223/qcache'])
+    client = QClient(['http://localhost:2222', 'http://localhost:2223'])
     json_result = client.query('test_key', q=dict(select=['foo', 'bar']), load_fn=data_source,
                                load_fn_kwargs=dict(content='baz'), content_type='application/json')
 
