@@ -102,5 +102,21 @@ def test_one_node_unavailable_then_appears():
     # the original destination node.
     kill_servers(pids1)
     assert client.get(key, q={}) is not None
+    assert client.statistics['http://localhost:2223']['resurrections']
 
     kill_servers(pids2)
+
+def test_delete():
+    pids = spawn_servers('2222')
+    nodes = ['http://localhost:2222', 'http://localhost:2223']
+    client = QClient(nodes)
+    content = data_source('foo')
+    key = '12345'
+
+    client.post(key, content, content_type='application/json')
+    assert client.get(key, q={}) is not None
+
+    client.delete(key)
+    assert client.get(key, q={}) is None
+
+    kill_servers(pids)

@@ -70,6 +70,7 @@ class QClient(object):
                 if response.status_code == 200:
                     self.node_ring.add_node(node)
                     self.failing_nodes.remove(node)
+                    self.statistics[node]['resurrections'] += 1
             except RequestException:
                 self.statistics[node]['retry_error'] += 1
 
@@ -114,7 +115,8 @@ class QClient(object):
             node = self._node_for_key(key)
             key_url = self._key_url(node, key)
             with self.connection_error_manager(node):
-                response = requests.get(key_url, params={'q': json_q}, headers={'Accept': accept})
+                response = requests.get(key_url, params={'q': json_q}, headers={'Accept': accept},
+                                        timeout=(self.connect_timeout, self.read_timeout))
                 if response.status_code == 200:
                     return response.content
 
@@ -161,3 +163,11 @@ class QClient(object):
                 content = load_fn(**load_fn_kwargs)
 
             self.post(key, content, content_type=content_type)
+
+    def delete(self, key):
+        while True:
+            node = self._node_for_key(key)
+            key_url = self._key_url(node, key)
+            with self.connection_error_manager(node):
+                requests.delete(key_url, timeout=(self.connect_timeout, self.read_timeout))
+                return
