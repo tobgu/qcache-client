@@ -63,7 +63,7 @@ setup(
         # eg: "keyword1", "keyword2", "keyword3",
     ],
     install_requires=[
-        "requests==2.8.0"
+        "requests==2.8.1"
     ],
     extras_require={
         # eg: 'rst': ["docutils>=0.11"],
