@@ -14,7 +14,7 @@ from setuptools.command.test import test as TestCommand
 class PyTest(TestCommand):
     def finalize_options(self):
         TestCommand.finalize_options(self)
-        self.test_args = ['-s']
+        self.test_args = ['tests', '-s']
         self.test_suite = True
 
     def run_tests(self):
@@ -52,11 +52,6 @@ setup(
         "Operating System :: Microsoft :: Windows",
         "Programming Language :: Python",
         "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.3",
-        "Programming Language :: Python :: 3.4",
-        "Programming Language :: Python :: Implementation :: CPython",
-        "Programming Language :: Python :: Implementation :: PyPy",
         "Topic :: Utilities",
     ],
     keywords=[
@@ -68,7 +63,7 @@ setup(
     extras_require={
         # eg: 'rst': ["docutils>=0.11"],
     },
-    tests_require=['pytest'],
+    tests_require=['pytest', 'qcache'],
     cmdclass={'test': PyTest}
 
 )

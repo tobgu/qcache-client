@@ -12,7 +12,7 @@ def data_source(content):
 
 
 def spawn_servers(*ports):
-    pids = [os.spawnlp(os.P_NOWAIT, "qcache", "-p", port) for port in ports]
+    pids = [os.spawnlp(os.P_NOWAIT, "qcache", "qcache", "--port=%s" % port) for port in ports]
 
     # Let the processes start
     time.sleep(2.0)

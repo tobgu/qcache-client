@@ -1,24 +1,11 @@
-===============================
-qcache-client
-===============================
+=============
+QCache-client
+=============
 
-
-Python client library for QCache
-
-* Free software: MIT license
-
-TODO
-----
-
-0.1.0 (first release) target
-----------------------------
-- More HTTP failure scenario tests
-- Documentation
-- Fetch server side statistics
+Python client library for QCache. Uses consistent hashing to distribute data over multiple nodes.
 
 Installation
 ============
-
 ::
 
     pip install qcache-client
@@ -26,11 +13,18 @@ Installation
 Documentation
 =============
 
-https://qcache-client.readthedocs.org/
+Documentation is close to non-existent right now. Please see the tests in test_qclient.py for examples of how to use it.
 
 Development
 ===========
 
 To run the all tests run::
 
-    tox
+    invoke test
+
+
+TODO
+====
+- Fetch server side statistics
+- Documentation
+- Support for other python versions than 2.7
