@@ -2,7 +2,9 @@
 QCache-client
 =============
 
-Python client library for QCache. Uses consistent hashing to distribute data over multiple nodes.
+.. _QCache: https://github.com/tobgu/qcache
+
+Python client library for QCache_. Uses consistent hashing to distribute data over multiple nodes.
 
 Installation
 ============
