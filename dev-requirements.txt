@@ -1,0 +1,4 @@
+requests==2.8.1
+qcache
+invoke
+pytest
