@@ -27,11 +27,11 @@ def kill_servers(pids):
 def test_basic_query_with_no_prior_data():
     pids = spawn_servers('2222', '2223')
     client = QClient(['http://localhost:2222', 'http://localhost:2223'])
-    json_result = client.query('test_key', q=dict(select=['foo', 'bar']), load_fn=data_source,
-                               load_fn_kwargs=dict(content='baz'), content_type='application/json')
+    result = client.query('test_key', q=dict(select=['foo', 'bar']), load_fn=data_source,
+                          load_fn_kwargs=dict(content='baz'), content_type='application/json')
 
-    result = json.loads(json_result)
-    assert result == [{'foo': 'baz', 'bar': 123}, {'foo': 'abc',   'bar': 321}]
+    result_data = json.loads(result.content)
+    assert result_data == [{'foo': 'baz', 'bar': 123}, {'foo': 'abc',   'bar': 321}]
 
     kill_servers(pids)
 
@@ -49,6 +49,7 @@ def test_no_nodes_available():
     assert client.statistics['http://localhost:2223']['connect_timeout'] + \
            client.statistics['http://localhost:2223']['connection_error'] == 1
 
+
 def test_no_nodes_available_then_node_becomes_available_again():
     client = QClient(['http://localhost:2222', 'http://localhost:2223'])
     with pytest.raises(NoCacheAvailable):
@@ -62,6 +63,7 @@ def test_no_nodes_available_then_node_becomes_available_again():
     assert result is None
     assert client.statistics['http://localhost:2222']['retry_error'] == 1
     assert client.statistics['http://localhost:2223']['retry_error'] == 2
+
 
 def _infinite_keys():
     i = 1000
@@ -77,6 +79,7 @@ def _get_key_on_node(nodes, destination_node):
     for key in _infinite_keys():
         if node_ring.get_node(key) == destination_node:
             return key
+
 
 def test_one_node_unavailable_then_appears():
     pids1 = spawn_servers('2222')
@@ -105,6 +108,7 @@ def test_one_node_unavailable_then_appears():
     assert client.statistics['http://localhost:2223']['resurrections']
 
     kill_servers(pids2)
+
 
 def test_delete():
     pids = spawn_servers('2222')

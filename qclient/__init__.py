@@ -38,6 +38,12 @@ def _node_statisticts():
                 retry_error=0)
 
 
+class QueryResult(object):
+    def __init__(self, content, unsliced_result_len):
+        self.content = content
+        self.unsliced_result_len = unsliced_result_len
+
+
 class QClient(object):
     def __init__(self, node_list, connect_timeout=1.0, read_timeout=2.0):
         self.node_ring = NodeRing(node_list)
@@ -117,9 +123,9 @@ class QClient(object):
             key_url = self._key_url(node, key)
             with self.connection_error_manager(node):
                 response = self.session.get(key_url, params={'q': json_q}, headers={'Accept': accept},
-                                        timeout=(self.connect_timeout, self.read_timeout))
+                                            timeout=(self.connect_timeout, self.read_timeout))
                 if response.status_code == 200:
-                    return response.content
+                    return QueryResult(response.content, int(response.headers['X-QCache-unsliced-length']))
 
                 if response.status_code == 404:
                     return None
@@ -145,7 +151,7 @@ class QClient(object):
 
             with self.connection_error_manager(node):
                 response = self.session.post(key_url, headers={'Content-type': content_type}, data=content,
-                                         timeout=(self.connect_timeout, self.read_timeout))
+                                             timeout=(self.connect_timeout, self.read_timeout))
                 if response.status_code == 201:
                     return
 

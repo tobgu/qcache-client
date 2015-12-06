@@ -30,3 +30,5 @@ TODO
 - Fetch server side statistics
 - Documentation
 - Support for other python versions than 2.7
+- Support chunked transfer
+- Support TLS, also with self signed certificates
