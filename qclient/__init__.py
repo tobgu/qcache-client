@@ -45,7 +45,7 @@ class QueryResult(object):
 
 
 class QClient(object):
-    def __init__(self, node_list, connect_timeout=1.0, read_timeout=2.0):
+    def __init__(self, node_list, connect_timeout=1.0, read_timeout=2.0, verify=True):
         self.node_ring = NodeRing(node_list)
         self.failing_nodes = set()
         self.connect_timeout = connect_timeout
@@ -54,6 +54,7 @@ class QClient(object):
         self.check_interval = 10
         self.post_count = 0
         self.session = requests.session()
+        self.verify = verify
 
     def _node_for_key(self, key):
         node = self.node_ring.get_node(key)
@@ -123,7 +124,7 @@ class QClient(object):
             key_url = self._key_url(node, key)
             with self.connection_error_manager(node):
                 response = self.session.get(key_url, params={'q': json_q}, headers={'Accept': accept},
-                                            timeout=(self.connect_timeout, self.read_timeout))
+                                            timeout=(self.connect_timeout, self.read_timeout), verify=self.verify)
                 if response.status_code == 200:
                     return QueryResult(response.content, int(response.headers['X-QCache-unsliced-length']))
 
@@ -151,7 +152,7 @@ class QClient(object):
 
             with self.connection_error_manager(node):
                 response = self.session.post(key_url, headers={'Content-type': content_type}, data=content,
-                                             timeout=(self.connect_timeout, self.read_timeout))
+                                             timeout=(self.connect_timeout, self.read_timeout), verify=self.verify)
                 if response.status_code == 201:
                     return
 
@@ -176,5 +177,5 @@ class QClient(object):
             node = self._node_for_key(key)
             key_url = self._key_url(node, key)
             with self.connection_error_manager(node):
-                self.session.delete(key_url, timeout=(self.connect_timeout, self.read_timeout))
+                self.session.delete(key_url, timeout=(self.connect_timeout, self.read_timeout), verify=self.verify)
                 return

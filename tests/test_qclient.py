@@ -11,8 +11,12 @@ def data_source(content):
                        {'foo': 'abc',   'bar': 321}])
 
 
-def spawn_servers(*ports):
-    pids = [os.spawnlp(os.P_NOWAIT, "qcache", "qcache", "--port=%s" % port) for port in ports]
+def spawn_servers(*ports, **kwargs):
+    args = [os.P_NOWAIT, "qcache", "qcache"]
+    if 'certfile' in kwargs:
+        args.append("--cert-file=%s" % kwargs['certfile'])
+
+    pids = [os.spawnlp(*(args + ["--port=%s" % port])) for port in ports]
 
     # Let the processes start
     time.sleep(2.0)
@@ -114,6 +118,22 @@ def test_delete():
     pids = spawn_servers('2222')
     nodes = ['http://localhost:2222', 'http://localhost:2223']
     client = QClient(nodes)
+    content = data_source('foo')
+    key = '12345'
+
+    client.post(key, content, content_type='application/json')
+    assert client.get(key, q={}) is not None
+
+    client.delete(key)
+    assert client.get(key, q={}) is None
+
+    kill_servers(pids)
+
+
+def test_https():
+    pids = spawn_servers('2222', certfile='tests/host.pem')
+    nodes = ['https://localhost:2222', 'https://localhost:2223']
+    client = QClient(nodes, verify='tests/rootCA.crt')
     content = data_source('foo')
     key = '12345'
 
