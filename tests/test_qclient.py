@@ -16,6 +16,9 @@ def spawn_servers(*ports, **kwargs):
     if 'certfile' in kwargs:
         args.append("--cert-file=%s" % kwargs['certfile'])
 
+    if 'auth' in kwargs:
+        args.append('--basic-auth=%s' % kwargs['auth'])
+
     pids = [os.spawnlp(*(args + ["--port=%s" % port])) for port in ports]
 
     # Let the processes start
@@ -116,7 +119,7 @@ def test_one_node_unavailable_then_appears():
 
 def test_delete():
     pids = spawn_servers('2222')
-    nodes = ['http://localhost:2222', 'http://localhost:2223']
+    nodes = ['http://localhost:2222']
     client = QClient(nodes)
     content = data_source('foo')
     key = '12345'
@@ -132,8 +135,24 @@ def test_delete():
 
 def test_https():
     pids = spawn_servers('2222', certfile='tests/host.pem')
-    nodes = ['https://localhost:2222', 'https://localhost:2223']
+    nodes = ['https://localhost:2222']
     client = QClient(nodes, verify='tests/rootCA.crt')
+    content = data_source('foo')
+    key = '12345'
+
+    client.post(key, content, content_type='application/json')
+    assert client.get(key, q={}) is not None
+
+    client.delete(key)
+    assert client.get(key, q={}) is None
+
+    kill_servers(pids)
+
+
+def test_https_with_basic_auth():
+    pids = spawn_servers('2222', certfile='tests/host.pem', auth='abc:123')
+    nodes = ['https://localhost:2222']
+    client = QClient(nodes, verify='tests/rootCA.crt', auth=('abc', '123'))
     content = data_source('foo')
     key = '12345'
 
