@@ -142,7 +142,7 @@ class QClient(object):
                     raise UnexpectedServerResponse('Unable to query dataset, status code {status_code}'.format(
                         status_code=response.status_code))
 
-    def post(self, key, content, content_type='text/csv'):
+    def post(self, key, content, content_type='text/csv', post_headers=None):
         # Checking of nodes that have previously been dropped is only done when inserting
         # new data right now. Rationale: If we have successful gets then there is no reason
         # to redistribute any data.
@@ -151,9 +151,12 @@ class QClient(object):
         while True:
             node = self._node_for_key(key)
             key_url = self._key_url(node, key)
+            headers = {'Content-type': content_type}
+            if post_headers:
+                headers.update(post_headers)
 
             with self.connection_error_manager(node):
-                response = self.session.post(key_url, headers={'Content-type': content_type}, data=content,
+                response = self.session.post(key_url, headers=headers, data=content,
                                              timeout=(self.connect_timeout, self.read_timeout), verify=self.verify,
                                              auth=self.auth)
                 if response.status_code == 201:
@@ -163,7 +166,7 @@ class QClient(object):
                 raise UnexpectedServerResponse('Unable to create dataset, status code {status_code}'.format(
                     status_code=response.status_code))
 
-    def query(self, key, q, load_fn, load_fn_kwargs=None, content_type='text/csv', accept='application/json'):
+    def query(self, key, q, load_fn, load_fn_kwargs=None, content_type='text/csv', accept='application/json', post_headers=None):
         content = None
         while True:
             result = self.get(key, q, accept)
@@ -171,9 +174,10 @@ class QClient(object):
                 return result
 
             if content is None:
-                content = load_fn(**load_fn_kwargs)
+                kwargs = load_fn_kwargs or {}
+                content = load_fn(**kwargs)
 
-            self.post(key, content, content_type=content_type)
+            self.post(key, content, content_type=content_type, post_headers=post_headers)
 
     def delete(self, key):
         while True:

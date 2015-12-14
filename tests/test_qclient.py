@@ -163,3 +163,20 @@ def test_https_with_basic_auth():
     assert client.get(key, q={}) is None
 
     kill_servers(pids)
+
+
+def data_source_csv():
+    return "foo,bar\r\ncba,123\r\nabc,321"
+
+
+
+def test_query_with_custom_post_header():
+    pids = spawn_servers('2222')
+    client = QClient(['http://localhost:2222'])
+    result = client.query('test_key', q=dict(where=['==', 'bar', "'321'"]), load_fn=data_source_csv,
+                          post_headers={'X-QCache-types': 'bar=string'})
+
+    result_data = json.loads(result.content)
+    assert result_data == [{'foo': 'abc',   'bar': '321'}]
+
+    kill_servers(pids)
