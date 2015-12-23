@@ -2,13 +2,11 @@
 import glob
 import io
 import re
-import sys
 from os.path import basename
 from os.path import dirname
 from os.path import join
 from os.path import splitext
 from setuptools import setup
-from setuptools.command.test import test as TestCommand
 
 
 def read(*names, **kwargs):
@@ -17,7 +15,7 @@ def read(*names, **kwargs):
         encoding=kwargs.get("encoding", "utf8")
     ).read()
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 
 setup(
     name="qcache-client",

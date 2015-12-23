@@ -6,9 +6,6 @@ from qclient.node_ring import NodeRing
 from collections import defaultdict
 
 
-__version__ = "0.2.0"
-
-
 class QClientException(Exception):
     pass
 
