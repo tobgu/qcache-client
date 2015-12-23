@@ -17,6 +17,10 @@ class NoCacheAvailable(QClientException):
     pass
 
 
+class TooManyConsecutiveErrors(QClientException):
+    pass
+
+
 class UnexpectedServerResponse(QClientException):
     pass
 
@@ -45,7 +49,7 @@ class QueryResult(object):
 
 
 class QClient(object):
-    def __init__(self, node_list, connect_timeout=1.0, read_timeout=2.0, verify=True, auth=None):
+    def __init__(self, node_list, connect_timeout=1.0, read_timeout=2.0, verify=True, auth=None, consecutive_error_count_limit=10):
         self.node_ring = NodeRing(node_list)
         self.failing_nodes = set()
         self.connect_timeout = connect_timeout
@@ -56,6 +60,8 @@ class QClient(object):
         self.session = requests.session()
         self.verify = verify
         self.auth = auth
+        self.consecutive_error_count = 0
+        self.consecutive_error_count_limit = consecutive_error_count_limit
 
     def _node_for_key(self, key):
         node = self.node_ring.get_node(key)
@@ -97,15 +103,24 @@ class QClient(object):
     def connection_error_manager(self, node):
         try:
             yield
+            self.consecutive_error_count = 0
         except ConnectTimeout:
             self.statistics[node]['connect_timeout'] += 1
             self._drop_node(node)
+            self.consecutive_error_count += 1
         except ConnectionError:
             self.statistics[node]['connection_error'] += 1
             self._drop_node(node)
+            self.consecutive_error_count += 1
         except ReadTimeout:
             self.statistics[node]['read_timeout'] += 1
             self._drop_node(node)
+            self.consecutive_error_count += 1
+        finally:
+            if self.consecutive_error_count >= self.consecutive_error_count_limit:
+                self.consecutive_error_count = 0
+                raise TooManyConsecutiveErrors('Too many errors occurred while trying operation: {stat}'.format(
+                    stat=dict(self.statistics)))
 
     @staticmethod
     def _status_url(node):
@@ -117,16 +132,23 @@ class QClient(object):
         new_node = node if node.endswith('/') else node + '/'
         return new_node + 'qcache/dataset/' + key
 
-    def get(self, key, q, accept='application/json'):
+    def get(self, key, q, accept='application/json', post_query=False):
         json_q = json.dumps(q)
 
         while True:
             node = self._node_for_key(key)
             key_url = self._key_url(node, key)
             with self.connection_error_manager(node):
-                response = self.session.get(key_url, params={'q': json_q}, headers={'Accept': accept},
-                                            timeout=(self.connect_timeout, self.read_timeout), verify=self.verify,
-                                            auth=self.auth)
+                if post_query:
+                    response = self.session.post(key_url + '/q', data=json_q,
+                                                 headers={'Accept': accept, 'Content-Type': 'application/json'},
+                                                 timeout=(self.connect_timeout, self.read_timeout), verify=self.verify,
+                                                 auth=self.auth)
+                else:
+                    response = self.session.get(key_url, params={'q': json_q}, headers={'Accept': accept},
+                                                timeout=(self.connect_timeout, self.read_timeout), verify=self.verify,
+                                                auth=self.auth)
+
                 if response.status_code == 200:
                     return QueryResult(response.content, int(response.headers['X-QCache-unsliced-length']))
 
@@ -157,7 +179,7 @@ class QClient(object):
 
             with self.connection_error_manager(node):
                 response = self.session.post(key_url, headers=headers, data=content,
-                                             timeout=(self.connect_timeout, self.read_timeout), verify=self.verify,
+                                             timeout=(self.connect_timeout, 10 * self.read_timeout), verify=self.verify,
                                              auth=self.auth)
                 if response.status_code == 201:
                     return
@@ -166,10 +188,10 @@ class QClient(object):
                 raise UnexpectedServerResponse('Unable to create dataset, status code {status_code}'.format(
                     status_code=response.status_code))
 
-    def query(self, key, q, load_fn, load_fn_kwargs=None, content_type='text/csv', accept='application/json', post_headers=None):
+    def query(self, key, q, load_fn, load_fn_kwargs=None, content_type='text/csv', accept='application/json', post_headers=None, post_query=False):
         content = None
         while True:
-            result = self.get(key, q, accept)
+            result = self.get(key, q, accept, post_query)
             if result is not None:
                 return result
 

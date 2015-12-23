@@ -1,9 +1,11 @@
 import json
 import os
+import random
 import signal
+import string
 import time
 import pytest
-from qclient import QClient, NoCacheAvailable, NodeRing
+from qclient import QClient, NoCacheAvailable, NodeRing, TooManyConsecutiveErrors
 
 
 def data_source(content):
@@ -31,6 +33,40 @@ def kill_servers(pids):
         os.kill(pid, signal.SIGTERM)
 
 
+def data_source2(content):
+    return json.dumps([{'foo': content, 'bar': 123},
+                       {'foo': 'abc',   'bar': 321}])
+
+
+def test_basic_query_using_post_with_no_prior_data():
+    pids = spawn_servers('2222', '2223')
+    client = QClient(['http://localhost:2222', 'http://localhost:2223'], read_timeout=1.0)
+
+    # A query of this size is not possible to execute using a GET (on my machine at least)
+    where = ["in", "foo", [("%s" % i) for i in range(300000)] + ["baz"]]
+    result = client.query('test_key', q=dict(select=['foo', 'bar'], where=where), load_fn=data_source2,
+                          load_fn_kwargs=dict(content='baz'), content_type='application/json', post_query=True)
+
+    result_data = json.loads(result.content)
+    kill_servers(pids)
+
+    assert result_data == [{'foo': 'baz', 'bar': 123}]
+
+
+def test_circuit_breaker_kicks_in_after_too_many_failures():
+    pids = spawn_servers('2222', '2223')
+    client = QClient(['http://localhost:2222', 'http://localhost:2223'], read_timeout=0.2, consecutive_error_count_limit=5)
+
+    # A query of this size is not possible to execute using a GET (on my machine at least)
+    # The circuit breaker should kick in after configured number of retries.
+    where = ["in", "foo", [("%s" % i) for i in range(300000)] + ["baz"]]
+    with pytest.raises(TooManyConsecutiveErrors):
+        client.query('test_key', q=dict(select=['foo', 'bar'], where=where), load_fn=data_source2,
+                     load_fn_kwargs=dict(content='baz'), content_type='application/json')
+
+    kill_servers(pids)
+
+
 def test_basic_query_with_no_prior_data():
     pids = spawn_servers('2222', '2223')
     client = QClient(['http://localhost:2222', 'http://localhost:2223'])
@@ -38,9 +74,9 @@ def test_basic_query_with_no_prior_data():
                           load_fn_kwargs=dict(content='baz'), content_type='application/json')
 
     result_data = json.loads(result.content)
-    assert result_data == [{'foo': 'baz', 'bar': 123}, {'foo': 'abc',   'bar': 321}]
-
     kill_servers(pids)
+
+    assert result_data == [{'foo': 'baz', 'bar': 123}, {'foo': 'abc',   'bar': 321}]
 
 
 def test_no_nodes_available():
@@ -169,7 +205,6 @@ def data_source_csv():
     return "foo,bar\r\ncba,123\r\nabc,321"
 
 
-
 def test_query_with_custom_post_header():
     pids = spawn_servers('2222')
     client = QClient(['http://localhost:2222'])
@@ -180,3 +215,18 @@ def test_query_with_custom_post_header():
     assert result_data == [{'foo': 'abc',   'bar': '321'}]
 
     kill_servers(pids)
+
+
+def id_generator(size=6, chars=string.ascii_uppercase + string.digits):
+    return ''.join(random.choice(chars) for _ in range(size))
+
+
+@pytest.mark.skipif(True, 'Only used for occasional performance tests')
+def xtest_repeated_posts_on_small_dataset():
+    client = QClient(['http://localhost:8882'])
+    content = data_source('foo')
+
+    for x in range(1000):
+        t0 = time.time()
+        client.post(id_generator(), content, content_type='application/json')
+        print "Loop: %s, duration: %s" % (x, time.time() - t0)
