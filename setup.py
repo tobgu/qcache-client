@@ -11,18 +11,6 @@ from setuptools import setup
 from setuptools.command.test import test as TestCommand
 
 
-class PyTest(TestCommand):
-    def finalize_options(self):
-        TestCommand.finalize_options(self)
-        self.test_args = ['tests', '-s']
-        self.test_suite = True
-
-    def run_tests(self):
-        import pytest
-        errcode = pytest.main(self.test_args)
-        sys.exit(errcode)
-
-
 def read(*names, **kwargs):
     return io.open(
         join(dirname(__file__), *names),
@@ -64,8 +52,5 @@ setup(
     ],
     extras_require={
         # eg: 'rst': ["docutils>=0.11"],
-    },
-    tests_require=['pytest', 'qcache'],
-    cmdclass={'test': PyTest}
-
+    }
 )

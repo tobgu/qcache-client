@@ -4,4 +4,10 @@ sudo: false
 install:
   - pip install -r dev-requirements.txt
 script:
-  - invoke test
+  - invoke coverage
+
+before_install:
+  - pip install codecov
+
+after_success:
+  - codecov

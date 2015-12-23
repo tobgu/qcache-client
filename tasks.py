@@ -9,7 +9,13 @@ build_dir = os.path.join(docs_dir, '_build')
 
 @task
 def test():
-    run('python setup.py test', pty=True)
+    run('python -m py.test -s', pty=True)
+
+@task
+def coverage():
+    run('python -m py.test -s --cov=qclient', pty=True)
+    run('coverage report -m', pty=True)
+    run('coverage html', pty=True)
 
 @task
 def clean():
