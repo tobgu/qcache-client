@@ -190,16 +190,23 @@ class QClient(object):
 
     def query(self, key, q, load_fn, load_fn_kwargs=None, content_type='text/csv', accept='application/json', post_headers=None, post_query=False):
         content = None
+        try_count = 0
         while True:
             result = self.get(key, q, accept, post_query)
             if result is not None:
                 return result
+
+            try_count += 1
+            if try_count > self.consecutive_error_count_limit:
+                raise TooManyConsecutiveErrors(
+                    'Unable to query dataset after {try_count} tries, this is probably a sign of problems'.format(try_count=try_count))
 
             if content is None:
                 kwargs = load_fn_kwargs or {}
                 content = load_fn(**kwargs)
 
             self.post(key, content, content_type=content_type, post_headers=post_headers)
+
 
 
     def delete(self, key):
