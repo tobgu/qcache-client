@@ -6,6 +6,7 @@ graft tests
 
 include LICENSE
 include README.rst
+include CHANGELOG.rst
 
 include tox.ini .travis.yml appveyor.yml
 

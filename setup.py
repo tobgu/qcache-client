@@ -15,7 +15,7 @@ def read(*names, **kwargs):
         encoding=kwargs.get("encoding", "utf8")
     ).read()
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 setup(
     name="qcache-client",

@@ -1,6 +1,10 @@
 Changelog
 =========
 
+0.3.1 (2016-01-16)
+------------------
+* Include CHANGELOG in release.
+
 0.3.0 (2015-12-23)
 ------------------
 * Possible to query using POST instead of GET. Good for very large queries.
