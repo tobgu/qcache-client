@@ -44,6 +44,12 @@ class QueryResult(object):
         self.content = content
         self.unsliced_result_len = unsliced_result_len
 
+    def __repr__(self):
+        return "{class_name}(content={content}, unsliced_result_len={unsliced_result_len})".format(
+            class_name=self.__class__.__name__, content=self.content, unsliced_result_len=self.unsliced_result_len)
+
+    __str__ = __repr__
+
 
 class QClient(object):
     def __init__(self, node_list, connect_timeout=1.0, read_timeout=2.0, verify=True, auth=None, consecutive_error_count_limit=10):

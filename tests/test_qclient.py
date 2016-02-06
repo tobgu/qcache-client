@@ -76,7 +76,9 @@ def test_basic_query_with_no_prior_data():
     result_data = json.loads(result.content)
     kill_servers(pids)
 
-    assert result_data == [{'foo': 'baz', 'bar': 123}, {'foo': 'abc',   'bar': 321}]
+    assert result_data == [{'foo': 'baz', 'bar': 123}, {'foo': 'abc', 'bar': 321}]
+    print str(result)
+    assert 'baz' in str(result)
 
 
 def test_no_nodes_available():
