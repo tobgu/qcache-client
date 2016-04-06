@@ -1,5 +1,4 @@
 requests==2.8.1
-qcache
 invoke<=0.12.0
 pytest
 pytest-cov

@@ -1,12 +1,15 @@
 language: python
 python: 2.7
-sudo: false
+sudo: required
+services:
+  - docker
 install:
   - pip install -r dev-requirements.txt
 script:
   - invoke coverage
 
 before_install:
+  - docker pull tobgu/qcache
   - pip install codecov
 
 after_success:

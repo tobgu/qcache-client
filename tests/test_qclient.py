@@ -1,8 +1,8 @@
 import json
 import os
 import random
-import signal
 import string
+import subprocess
 import time
 import pytest
 from qclient import QClient, NoCacheAvailable, NodeRing, TooManyConsecutiveErrors
@@ -14,23 +14,35 @@ def data_source(content):
 
 
 def spawn_servers(*ports, **kwargs):
-    args = [os.P_NOWAIT, "qcache", "qcache"]
-    if 'certfile' in kwargs:
-        args.append("--cert-file=%s" % kwargs['certfile'])
+    names = []
+    for port in ports:
+        name = "qcache{port}".format(port=port)
+        names.append(name)
+        args = [os.P_NOWAIT, "docker", "docker",
+                "run",
+                "--net=host",
+                "-p", "{port}:{port}".format(port=port),
+                "-v", "{dir}:/certs".format(dir=os.path.dirname(os.path.abspath(__file__))),
+                "--rm",
+                "--name", name,
+                "tobgu/qcache",
+                "qcache", "--port={port}".format(port=port)]
+        if 'certfile' in kwargs:
+            args.append("--cert-file=/certs/%s" % kwargs['certfile'])
 
-    if 'auth' in kwargs:
-        args.append('--basic-auth=%s' % kwargs['auth'])
+        if 'auth' in kwargs:
+            args.append('--basic-auth=%s' % kwargs['auth'])
 
-    pids = [os.spawnlp(*(args + ["--port=%s" % port])) for port in ports]
+        os.spawnlp(*args)
 
     # Let the processes start
     time.sleep(2.0)
-    return pids
+    return names
 
 
-def kill_servers(pids):
-    for pid in pids:
-        os.kill(pid, signal.SIGTERM)
+def kill_servers(names):
+    for name in names:
+        subprocess.check_output(["docker", "kill", "{name}".format(name=name)])
 
 
 def data_source2(content):
@@ -39,7 +51,7 @@ def data_source2(content):
 
 
 def test_basic_query_using_post_with_no_prior_data():
-    pids = spawn_servers('2222', '2223')
+    names = spawn_servers('2222', '2223')
     client = QClient(['http://localhost:2222', 'http://localhost:2223'], read_timeout=1.0)
 
     # A query of this size is not possible to execute using a GET (on my machine at least)
@@ -48,13 +60,12 @@ def test_basic_query_using_post_with_no_prior_data():
                           load_fn_kwargs=dict(content='baz'), content_type='application/json', post_query=True)
 
     result_data = json.loads(result.content)
-    kill_servers(pids)
-
+    kill_servers(names)
     assert result_data == [{'foo': 'baz', 'bar': 123}]
 
 
 def test_circuit_breaker_kicks_in_after_too_many_failures():
-    pids = spawn_servers('2222', '2223')
+    names = spawn_servers('2222', '2223')
     client = QClient(['http://localhost:2222', 'http://localhost:2223'], read_timeout=0.2, consecutive_error_count_limit=5)
 
     # A query of this size is not possible to execute using a GET (on my machine at least)
@@ -64,17 +75,17 @@ def test_circuit_breaker_kicks_in_after_too_many_failures():
         client.query('test_key', q=dict(select=['foo', 'bar'], where=where), load_fn=data_source2,
                      load_fn_kwargs=dict(content='baz'), content_type='application/json')
 
-    kill_servers(pids)
+    kill_servers(names)
 
 
 def test_basic_query_with_no_prior_data():
-    pids = spawn_servers('2222', '2223')
+    names = spawn_servers('2222', '2223')
     client = QClient(['http://localhost:2222', 'http://localhost:2223'])
     result = client.query('test_key', q=dict(select=['foo', 'bar']), load_fn=data_source,
                           load_fn_kwargs=dict(content='baz'), content_type='application/json')
 
     result_data = json.loads(result.content)
-    kill_servers(pids)
+    kill_servers(names)
 
     assert result_data == [{'foo': 'baz', 'bar': 123}, {'foo': 'abc', 'bar': 321}]
     print str(result)
@@ -101,9 +112,9 @@ def test_no_nodes_available_then_node_becomes_available_again():
         client.get('test_key', q=dict())
 
     # Start a server and validate that the client resumes the connection
-    pids = spawn_servers('2222')
+    names = spawn_servers('2222')
     result = client.get('test_key', q=dict())
-    kill_servers(pids)
+    kill_servers(names)
 
     assert result is None
     assert client.statistics['http://localhost:2222']['retry_error'] == 1
@@ -127,7 +138,7 @@ def _get_key_on_node(nodes, destination_node):
 
 
 def test_one_node_unavailable_then_appears():
-    pids1 = spawn_servers('2222')
+    names1 = spawn_servers('2222')
     nodes = ['http://localhost:2222', 'http://localhost:2223']
     client = QClient(nodes)
     key = _get_key_on_node(nodes, 'http://localhost:2223')
@@ -141,22 +152,22 @@ def test_one_node_unavailable_then_appears():
 
     # Now start the server that the key is destined for and re-post the data
     # a number of times until it is moved to the destination node.
-    pids2 = spawn_servers('2223')
+    names2 = spawn_servers('2223')
     for _ in range(10):
         client.post(key, content, content_type='application/json')
 
     # Kill the first server to make sure that no stale data exists
     # and perform a get to verify that the data has indeed been moved to
     # the original destination node.
-    kill_servers(pids1)
+    kill_servers(names1)
     assert client.get(key, q={}) is not None
     assert client.statistics['http://localhost:2223']['resurrections']
 
-    kill_servers(pids2)
+    kill_servers(names2)
 
 
 def test_delete():
-    pids = spawn_servers('2222')
+    names = spawn_servers('2222')
     nodes = ['http://localhost:2222']
     client = QClient(nodes)
     content = data_source('foo')
@@ -168,11 +179,11 @@ def test_delete():
     client.delete(key)
     assert client.get(key, q={}) is None
 
-    kill_servers(pids)
+    kill_servers(names)
 
 
 def test_https():
-    pids = spawn_servers('2222', certfile='tests/host.pem')
+    names = spawn_servers('2222', certfile='host.pem')
     nodes = ['https://localhost:2222']
     client = QClient(nodes, verify='tests/rootCA.crt')
     content = data_source('foo')
@@ -184,11 +195,11 @@ def test_https():
     client.delete(key)
     assert client.get(key, q={}) is None
 
-    kill_servers(pids)
+    kill_servers(names)
 
 
 def test_https_with_basic_auth():
-    pids = spawn_servers('2222', certfile='tests/host.pem', auth='abc:123')
+    names = spawn_servers('2222', certfile='host.pem', auth='abc:123')
     nodes = ['https://localhost:2222']
     client = QClient(nodes, verify='tests/rootCA.crt', auth=('abc', '123'))
     content = data_source('foo')
@@ -200,7 +211,7 @@ def test_https_with_basic_auth():
     client.delete(key)
     assert client.get(key, q={}) is None
 
-    kill_servers(pids)
+    kill_servers(names)
 
 
 def data_source_csv():
@@ -208,7 +219,7 @@ def data_source_csv():
 
 
 def test_query_with_custom_post_header():
-    pids = spawn_servers('2222')
+    names = spawn_servers('2222')
     client = QClient(['http://localhost:2222'])
     result = client.query('test_key', q=dict(where=['==', 'bar', "'321'"]), load_fn=data_source_csv,
                           post_headers={'X-QCache-types': 'bar=string'})
@@ -216,7 +227,7 @@ def test_query_with_custom_post_header():
     result_data = json.loads(result.content)
     assert result_data == [{'foo': 'abc',   'bar': '321'}]
 
-    kill_servers(pids)
+    kill_servers(names)
 
 
 def id_generator(size=6, chars=string.ascii_uppercase + string.digits):
