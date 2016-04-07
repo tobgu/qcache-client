@@ -210,8 +210,6 @@ class QClient(object):
 
             self.post(key, content, content_type=content_type, post_headers=post_headers)
 
-
-
     def delete(self, key):
         while True:
             node = self._node_for_key(key)
