@@ -2,7 +2,6 @@ import json
 import os
 import random
 import string
-import subprocess
 import time
 import pytest
 from qclient import QClient, NoCacheAvailable, NodeRing, TooManyConsecutiveErrors
@@ -10,48 +9,64 @@ from qclient import QClient, NoCacheAvailable, NodeRing, TooManyConsecutiveError
 
 def data_source(content):
     return json.dumps([{'foo': content, 'bar': 123},
-                       {'foo': 'abc',   'bar': 321}])
+                       {'foo': 'abc', 'bar': 321}])
 
 
-def spawn_servers(*ports, **kwargs):
-    names = []
-    for port in ports:
-        name = "qcache{port}".format(port=port)
-        names.append(name)
-        args = [os.P_NOWAIT, "docker", "docker",
-                "run",
-                "--net=host",
-                "-p", "{port}:{port}".format(port=port),
-                "-v", "{dir}:/certs".format(dir=os.path.dirname(os.path.abspath(__file__))),
-                "--rm",
-                "--name", name,
-                "tobgu/qcache",
-                "qcache", "--port={port}".format(port=port)]
-        if 'certfile' in kwargs:
-            args.append("--cert-file=/certs/%s" % kwargs['certfile'])
+@pytest.yield_fixture
+def qcache_factory():
+    class QCacheFactory(object):
+        def __init__(self):
+            self.caches = set()
 
-        if 'auth' in kwargs:
-            args.append('--basic-auth=%s' % kwargs['auth'])
+        def spawn_caches(self, *ports, **kwargs):
+            names = []
+            for port in ports:
+                name = "qcache{port}".format(port=port)
+                names.append(name)
+                args = [os.P_NOWAIT, "docker", "docker",
+                        "run",
+                        "--net=host",
+                        "-p", "{port}:{port}".format(port=port),
+                        "-v", "{dir}:/certs".format(dir=os.path.dirname(os.path.abspath(__file__))),
+                        "--rm",
+                        "--name", name,
+                        "tobgu/qcache",
+                        "qcache", "--port={port}".format(port=port)]
+                if 'certfile' in kwargs:
+                    args.append("--cert-file=/certs/%s" % kwargs['certfile'])
 
-        os.spawnlp(*args)
+                if 'auth' in kwargs:
+                    args.append('--basic-auth=%s' % kwargs['auth'])
+                os.spawnlp(os.P_NOWAIT, "docker", "docker", "rm", "-f", name)
+                time.sleep(1.0)
+                os.spawnlp(*args)
 
-    # Let the processes start
-    time.sleep(2.0)
-    return names
+            # Let the processes start
+            time.sleep(2.0)
+            self.caches.update(names)
+            return names
 
+        def kill_caches(self, *names):
+            for name in names:
+                os.spawnlp(os.P_NOWAIT, "docker", "docker", "kill", "{name}".format(name=name))
+                self.caches.discard(name)
+            time.sleep(1)
 
-def kill_servers(names):
-    for name in names:
-        subprocess.check_output(["docker", "kill", "{name}".format(name=name)])
+        def kill_all(self):
+            self.kill_caches(*list(self.caches))
+
+    factory = QCacheFactory()
+    yield factory
+    factory.kill_all()
 
 
 def data_source2(content):
     return json.dumps([{'foo': content, 'bar': 123},
-                       {'foo': 'abc',   'bar': 321}])
+                       {'foo': 'abc', 'bar': 321}])
 
 
-def test_basic_query_using_post_with_no_prior_data():
-    names = spawn_servers('2222', '2223')
+def test_basic_query_using_post_with_no_prior_data(qcache_factory):
+    qcache_factory.spawn_caches('2222', '2223')
     client = QClient(['http://localhost:2222', 'http://localhost:2223'], read_timeout=1.0)
 
     # A query of this size is not possible to execute using a GET (on my machine at least)
@@ -59,14 +74,14 @@ def test_basic_query_using_post_with_no_prior_data():
     result = client.query('test_key', q=dict(select=['foo', 'bar'], where=where), load_fn=data_source2,
                           load_fn_kwargs=dict(content='baz'), content_type='application/json', post_query=True)
 
-    result_data = json.loads(result.content)
-    kill_servers(names)
+    result_data = json.loads(result.content.decode('utf8'))
     assert result_data == [{'foo': 'baz', 'bar': 123}]
 
 
-def test_circuit_breaker_kicks_in_after_too_many_failures():
-    names = spawn_servers('2222', '2223')
-    client = QClient(['http://localhost:2222', 'http://localhost:2223'], read_timeout=0.2, consecutive_error_count_limit=5)
+def test_circuit_breaker_kicks_in_after_too_many_failures(qcache_factory):
+    qcache_factory.spawn_caches('2222', '2223')
+    client = QClient(['http://localhost:2222', 'http://localhost:2223'], read_timeout=0.2,
+                     consecutive_error_count_limit=5)
 
     # A query of this size is not possible to execute using a GET (on my machine at least)
     # The circuit breaker should kick in after configured number of retries.
@@ -75,24 +90,21 @@ def test_circuit_breaker_kicks_in_after_too_many_failures():
         client.query('test_key', q=dict(select=['foo', 'bar'], where=where), load_fn=data_source2,
                      load_fn_kwargs=dict(content='baz'), content_type='application/json')
 
-    kill_servers(names)
 
-
-def test_basic_query_with_no_prior_data():
-    names = spawn_servers('2222', '2223')
+def test_basic_query_with_no_prior_data(qcache_factory):
+    qcache_factory.spawn_caches('2222', '2223')
     client = QClient(['http://localhost:2222', 'http://localhost:2223'])
     result = client.query('test_key', q=dict(select=['foo', 'bar']), load_fn=data_source,
                           load_fn_kwargs=dict(content='baz'), content_type='application/json')
 
-    result_data = json.loads(result.content)
-    kill_servers(names)
+    result_data = json.loads(result.content.decode('utf8'))
 
     assert result_data == [{'foo': 'baz', 'bar': 123}, {'foo': 'abc', 'bar': 321}]
-    print str(result)
     assert 'baz' in str(result)
 
 
-def test_no_nodes_available():
+def test_no_nodes_available(qcache_factory):
+    qcache_factory.kill_caches('2222', '2223')
     client = QClient(['http://localhost:2222', 'http://localhost:2223'])
     with pytest.raises(NoCacheAvailable):
         client.query('test_key', q=dict(select=['foo', 'bar']), load_fn=data_source,
@@ -106,15 +118,14 @@ def test_no_nodes_available():
            client.statistics['http://localhost:2223']['connection_error'] == 1
 
 
-def test_no_nodes_available_then_node_becomes_available_again():
+def test_no_nodes_available_then_node_becomes_available_again(qcache_factory):
     client = QClient(['http://localhost:2222', 'http://localhost:2223'])
     with pytest.raises(NoCacheAvailable):
         client.get('test_key', q=dict())
 
     # Start a server and validate that the client resumes the connection
-    names = spawn_servers('2222')
+    qcache_factory.spawn_caches('2222')
     result = client.get('test_key', q=dict())
-    kill_servers(names)
 
     assert result is None
     assert client.statistics['http://localhost:2222']['retry_error'] == 1
@@ -137,8 +148,8 @@ def _get_key_on_node(nodes, destination_node):
             return key
 
 
-def test_one_node_unavailable_then_appears():
-    names1 = spawn_servers('2222')
+def test_one_node_unavailable_then_appears(qcache_factory):
+    names1 = qcache_factory.spawn_caches('2222')
     nodes = ['http://localhost:2222', 'http://localhost:2223']
     client = QClient(nodes)
     key = _get_key_on_node(nodes, 'http://localhost:2223')
@@ -152,22 +163,20 @@ def test_one_node_unavailable_then_appears():
 
     # Now start the server that the key is destined for and re-post the data
     # a number of times until it is moved to the destination node.
-    names2 = spawn_servers('2223')
+    qcache_factory.spawn_caches('2223')
     for _ in range(10):
         client.post(key, content, content_type='application/json')
 
     # Kill the first server to make sure that no stale data exists
     # and perform a get to verify that the data has indeed been moved to
     # the original destination node.
-    kill_servers(names1)
+    qcache_factory.kill_caches(*names1)
     assert client.get(key, q={}) is not None
     assert client.statistics['http://localhost:2223']['resurrections']
 
-    kill_servers(names2)
 
-
-def test_delete():
-    names = spawn_servers('2222')
+def test_delete(qcache_factory):
+    qcache_factory.spawn_caches('2222')
     nodes = ['http://localhost:2222']
     client = QClient(nodes)
     content = data_source('foo')
@@ -179,11 +188,9 @@ def test_delete():
     client.delete(key)
     assert client.get(key, q={}) is None
 
-    kill_servers(names)
 
-
-def test_https():
-    names = spawn_servers('2222', certfile='host.pem')
+def test_https(qcache_factory):
+    qcache_factory.spawn_caches('2222', certfile='host.pem')
     nodes = ['https://localhost:2222']
     client = QClient(nodes, verify='tests/rootCA.crt')
     content = data_source('foo')
@@ -195,11 +202,9 @@ def test_https():
     client.delete(key)
     assert client.get(key, q={}) is None
 
-    kill_servers(names)
 
-
-def test_https_with_basic_auth():
-    names = spawn_servers('2222', certfile='host.pem', auth='abc:123')
+def test_https_with_basic_auth(qcache_factory):
+    qcache_factory.spawn_caches('2222', certfile='host.pem', auth='abc:123')
     nodes = ['https://localhost:2222']
     client = QClient(nodes, verify='tests/rootCA.crt', auth=('abc', '123'))
     content = data_source('foo')
@@ -211,23 +216,19 @@ def test_https_with_basic_auth():
     client.delete(key)
     assert client.get(key, q={}) is None
 
-    kill_servers(names)
-
 
 def data_source_csv():
     return "foo,bar\r\ncba,123\r\nabc,321"
 
 
-def test_query_with_custom_post_header():
-    names = spawn_servers('2222')
+def test_query_with_custom_post_header(qcache_factory):
+    qcache_factory.spawn_caches('2222')
     client = QClient(['http://localhost:2222'])
     result = client.query('test_key', q=dict(where=['==', 'bar', "'321'"]), load_fn=data_source_csv,
                           post_headers={'X-QCache-types': 'bar=string'})
 
-    result_data = json.loads(result.content)
-    assert result_data == [{'foo': 'abc',   'bar': '321'}]
-
-    kill_servers(names)
+    result_data = json.loads(result.content.decode('utf8'))
+    assert result_data == [{'foo': 'abc', 'bar': '321'}]
 
 
 def id_generator(size=6, chars=string.ascii_uppercase + string.digits):
@@ -242,4 +243,4 @@ def xtest_repeated_posts_on_small_dataset():
     for x in range(1000):
         t0 = time.time()
         client.post(id_generator(), content, content_type='application/json')
-        print "Loop: %s, duration: %s" % (x, time.time() - t0)
+        print("Loop: {num}, duration: {dur}".format(num=x, dur=time.time() - t0))

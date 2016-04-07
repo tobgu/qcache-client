@@ -1,7 +1,12 @@
 from bisect import bisect
 import hashlib
 from math import ceil
+import sys
 
+if sys.version_info[0] >= 3:
+    _ord = lambda x: x
+else:
+    _ord = ord
 
 class NodeRing(object):
     def __init__(self, nodes, weights=None, virtual_count=None):
@@ -14,7 +19,7 @@ class NodeRing(object):
         # If number of virtual nodes per real node is not given aim for 1000 nodes in
         # total. That will provide a fairly decent distribution without too much overhead
         # when creating the circle or adding/removing nodes.
-        self.virtual_count = virtual_count if virtual_count else int(ceil(1000.0/len(nodes)))
+        self.virtual_count = virtual_count if virtual_count else int(ceil(1000.0 / len(nodes)))
         self.add_nodes(nodes)
 
     def add_node(self, node, weight=None):
@@ -56,10 +61,9 @@ class NodeRing(object):
 def hash_digest(key):
     m = hashlib.md5()
     m.update(bytes(key.encode('utf-8')))
-    return [ord(b) for b in m.digest()]
+    return [_ord(b) for b in m.digest()]
 
 
 def generate_key(key):
     byte_key = hash_digest(key)
     return (byte_key[3] << 24) | (byte_key[2] << 16) | (byte_key[1] << 8) | byte_key[0]
-
