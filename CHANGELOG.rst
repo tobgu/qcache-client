@@ -1,6 +1,10 @@
 Changelog
 =========
 
+0.3.2 (2016-04-10)
+------------------
+* Support Python 3.4 and 3.5.
+
 0.3.1 (2016-01-16)
 ------------------
 * Include CHANGELOG in release.
