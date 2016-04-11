@@ -2,3 +2,4 @@ requests==2.8.1
 invoke<=0.12.0
 pytest
 pytest-cov
+Sphinx

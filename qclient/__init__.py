@@ -7,26 +7,46 @@ from collections import defaultdict
 
 
 class QClientException(Exception):
+    """
+    Base exception for all other exceptions raised in QClient
+    """
     pass
 
 
 class NoCacheAvailable(QClientException):
+    """
+    Raised when no qcaches are deemed reachable from the currnent node.
+    """
     pass
 
 
 class TooManyConsecutiveErrors(QClientException):
+    """
+    Raised to when operations have been retried too many times. This is done to avoid overloading
+    resources with failing requests. If raised it's probably an indicator of some misconfiguration
+    or network problem.
+    """
     pass
 
 
 class UnexpectedServerResponse(QClientException):
+    """
+    Raised when the QCache server responded with an HTTP code that could not be interpreted.
+    """
     pass
 
 
 class MalformedQueryException(QClientException):
+    """
+    Raised when the server was unable to process the query because of errors in syntax or semantics.
+    """
     pass
 
 
 class UnsupportedAcceptType(QClientException):
+    """
+    Raised when the server cannot produce a response of the requested type.
+    """
     pass
 
 
@@ -40,6 +60,12 @@ def _node_statisticts():
 
 
 class QueryResult(object):
+    """
+    Returned upon successful query response.
+
+    :param content: A byte string containing the body received from the server.
+    :param unsliced_result_len: contains the complete result length. If no slicing/pagination is applied this will equal the number of records returned.
+    """
     def __init__(self, content, unsliced_result_len):
         self.content = content
         self.unsliced_result_len = unsliced_result_len
@@ -52,6 +78,23 @@ class QueryResult(object):
 
 
 class QClient(object):
+    """
+    Main client class.
+
+    Basic example:
+
+    >>> client = QClient(node_list=('http://host1:9401', 'http://host2:9401', 'http://host3:9401'))
+    >>> result = client.get('someKey', {'select': ['col1', 'col2', 'col3'], 'where': ['<', 'col', 1]})
+
+    :param node_list: List or other iterables with addresses to qcache servers.
+                      Eg. ['http://host1:9401', 'http://host2:9401']
+    :param connect_timeout: Number of seconds to wait until connection timeout occurs.
+    :param read_timeout: Number of seconds to wait until read timeout occurs.
+    :param verify: If https is used controls if the host certificate should be verified.
+    :param auth: Tuple (username, password), used for basic auth.
+    :param consecutive_error_count_limit: Number of times to retry operations before giving up.
+    """
+
     def __init__(self, node_list, connect_timeout=1.0, read_timeout=2.0, verify=True, auth=None, consecutive_error_count_limit=10):
         self.node_ring = NodeRing(node_list)
         self.failing_nodes = set()
@@ -103,7 +146,7 @@ class QClient(object):
         self.post_count += 1
 
     @contextmanager
-    def connection_error_manager(self, node):
+    def _connection_error_manager(self, node):
         try:
             yield
             self.consecutive_error_count = 0
@@ -136,12 +179,26 @@ class QClient(object):
         return new_node + 'qcache/dataset/' + key
 
     def get(self, key, q, accept='application/json', post_query=False):
+        """
+        Execute query and return result.
+
+        :param key: Key for the table to query.
+        :param q: Dict with the query as described in the QCache documentation
+        :param accept: Response type, application/json and text/csv are supported
+        :param post_query: If set the query will be executed using a POST rather than GET. Good for very large queries.
+        :returns QueryResult: Contains the result of the query.
+        :raises MalformedQueryException:
+        :raises UnsupportedAcceptType:
+        :raises UnexpectedServerResponse:
+        :raises TooManyConsecutiveErrors:
+        :raises NoCacheAvailable:
+        """
         json_q = json.dumps(q)
 
         while True:
             node = self._node_for_key(key)
             key_url = self._key_url(node, key)
-            with self.connection_error_manager(node):
+            with self._connection_error_manager(node):
                 if post_query:
                     response = self.session.post(key_url + '/q', data=json_q,
                                                  headers={'Accept': accept, 'Content-Type': 'application/json'},
@@ -180,7 +237,7 @@ class QClient(object):
             if post_headers:
                 headers.update(post_headers)
 
-            with self.connection_error_manager(node):
+            with self._connection_error_manager(node):
                 response = self.session.post(key_url, headers=headers, data=content,
                                              timeout=(self.connect_timeout, 10 * self.read_timeout), verify=self.verify,
                                              auth=self.auth)
@@ -214,7 +271,7 @@ class QClient(object):
         while True:
             node = self._node_for_key(key)
             key_url = self._key_url(node, key)
-            with self.connection_error_manager(node):
+            with self._connection_error_manager(node):
                 self.session.delete(
                     key_url, timeout=(self.connect_timeout, self.read_timeout), verify=self.verify, auth=self.auth)
                 return
