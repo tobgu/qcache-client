@@ -225,6 +225,22 @@ class QClient(object):
                         status_code=response.status_code))
 
     def post(self, key, content, content_type='text/csv', post_headers=None):
+        """
+        Post table data to QCache for key.
+
+        :param key: Key to store the table under
+        :param content: Byte string with content encoded either as CSV or JSON.
+        :param content_type: application/json or text/csv depending on uploaded content
+        :param post_headers: dict with additional headers to include.
+                             Key - header name
+                             Value - header value
+        :return: None
+        :raises MalformedQueryException:
+        :raises UnsupportedAcceptType:
+        :raises UnexpectedServerResponse:
+        :raises TooManyConsecutiveErrors:
+        :raises NoCacheAvailable:
+        """
         # Checking of nodes that have previously been dropped is only done when inserting
         # new data right now. Rationale: If we have successful gets then there is no reason
         # to redistribute any data.
@@ -249,6 +265,29 @@ class QClient(object):
                     status_code=response.status_code))
 
     def query(self, key, q, load_fn, load_fn_kwargs=None, content_type='text/csv', accept='application/json', post_headers=None, post_query=False):
+        """
+        Convenience method to query for data. If the requested key is not available in the QCache a call will
+        be made to :load_fn: providing :load_fn_kwargs: as key value args. :load_fn: should return the data to
+        insert into QCache. Once the data has been pushed to QCache the query in executed again against the newly
+        created table.
+
+        :param key: Key for the table to query.
+        :param q: Dict with the query as described in the QCache documentation
+        :param load_fn: Function called to fetch data if not present in QCache.
+        :param load_fn_kwargs: Key-value arguments to load_fn
+        :param content_type: application/json or text/csv depending on uploaded content
+        :param accept: Response type, application/json and text/csv are supported
+        :param post_headers: dict with additional headers to include.
+                             Key - header name
+                             Value - header value
+        :param post_query: If set the query will be executed using a POST rather than GET. Good for very large queries.
+        :return: QueryResult: Contains the result of the query.
+        :raises MalformedQueryException:
+        :raises UnsupportedAcceptType:
+        :raises UnexpectedServerResponse:
+        :raises TooManyConsecutiveErrors:
+        :raises NoCacheAvailable:
+        """
         content = None
         try_count = 0
         while True:
@@ -268,6 +307,24 @@ class QClient(object):
             self.post(key, content, content_type=content_type, post_headers=post_headers)
 
     def delete(self, key):
+        """
+        Delete table stored under key from QCache.
+
+        NOTE: If more than one QCache node is used there is no guarantee that the table is completely removed
+              since it may be stored in multiple location depending events.
+
+              Example:
+              A small installation with two Qaches, qc1 and qc2. Table t1 is stored on qc1. qc1 disappears for unknown
+              reason. t1 is then stored and read from t2 instead. Later t1 comes back. Data is now read from qc1
+              instead. A delete would in this case be issued against qc1, after the delete qc2 would still hold a
+              copy of t1.
+
+        :param key: Key for the table to delete
+        :raises UnexpectedServerResponse:
+        :raises TooManyConsecutiveErrors:
+        :raises NoCacheAvailable:
+        :return: None
+        """
         while True:
             node = self._node_for_key(key)
             key_url = self._key_url(node, key)
