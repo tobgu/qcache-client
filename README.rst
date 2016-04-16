@@ -25,7 +25,9 @@ Installation
 Documentation
 =============
 
-Documentation is close to non-existent right now. Please see the tests in test_qclient.py for examples of how to use it.
+Available at http://qcache-client.readthedocs.org/en/latest/.
+
+Please see the tests in test_qclient.py for examples of how to use it.
 
 
 Contributing
@@ -40,6 +42,9 @@ so that we can discuss it first.
 
 Running tests
 =============
+The tests requires that you have docker installed since they are executed against a QCache instance running
+in a docker container.
+
 .. code::
 
    pip install -r dev-requirements.txt
@@ -47,4 +52,4 @@ Running tests
 
 TODO
 ====
-- Documentation
+- Async interface?
