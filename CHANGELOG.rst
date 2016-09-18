@@ -1,6 +1,11 @@
 Changelog
 =========
 
+0.4.0 (2016-09-18)
+------------------
+* Support for custom headers when running queries. This allows use of the pandas filter engine
+  introduced in QCache 0.6.1.
+
 0.3.2 (2016-04-10)
 ------------------
 * Support Python 3.4 and 3.5.

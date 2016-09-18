@@ -1,21 +1,22 @@
 # -*- coding: utf-8 -*-
 import os
-import sys
-
 from invoke import task, run
 
 docs_dir = 'docs'
 build_dir = os.path.join(docs_dir, '_build')
 
+
 @task
 def test():
     run('python -m py.test -s', pty=True)
+
 
 @task
 def coverage():
     run('python -m py.test -s --cov=qclient', pty=True)
     run('coverage report -m', pty=True)
     run('coverage html', pty=True)
+
 
 @task
 def clean():
@@ -25,13 +26,16 @@ def clean():
     clean_docs()
     print("Cleaned up.")
 
+
 @task
 def clean_docs():
     run("rm -rf %s" % build_dir)
 
+
 @task
 def browse_docs():
     run("open %s" % os.path.join(build_dir, 'index.html'))
+
 
 @task
 def build_docs(clean=False, browse=False):
@@ -41,9 +45,11 @@ def build_docs(clean=False, browse=False):
     if browse:
         browse_docs()
 
+
 @task
 def readme(browse=False):
     run('rst2html.py README.rst > README.html')
+
 
 @task
 def publish(test=False):

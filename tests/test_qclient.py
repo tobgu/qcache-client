@@ -7,6 +7,10 @@ import pytest
 from qclient import QClient, NoCacheAvailable, NodeRing, TooManyConsecutiveErrors
 
 
+# Version to test against
+QCACHE_VERSION = '0.6.1'
+
+
 def data_source(content):
     return json.dumps([{'foo': content, 'bar': 123},
                        {'foo': 'abc', 'bar': 321}])
@@ -30,7 +34,7 @@ def qcache_factory():
                         "-v", "{dir}:/certs".format(dir=os.path.dirname(os.path.abspath(__file__))),
                         "--rm",
                         "--name", name,
-                        "tobgu/qcache",
+                        "tobgu/qcache:{version}".format(version=QCACHE_VERSION),
                         "qcache", "--port={port}".format(port=port)]
                 if 'certfile' in kwargs:
                     args.append("--cert-file=/certs/%s" % kwargs['certfile'])
@@ -229,6 +233,15 @@ def test_query_with_custom_post_header(qcache_factory):
 
     result_data = json.loads(result.content.decode('utf8'))
     assert result_data == [{'foo': 'abc', 'bar': '321'}]
+
+
+def test_query_with_custom_query_header(qcache_factory):
+    qcache_factory.spawn_caches('2222')
+    client = QClient(['http://localhost:2222'])
+    result = client.query('test_key', q=dict(where=['like', 'foo', "'%b%'"]), load_fn=data_source_csv,
+                          query_headers={'X-QCache-filter-engine': 'pandas'})
+    result_data = json.loads(result.content.decode('utf8'))
+    assert result_data == [{'foo': 'cba', 'bar': 123}, {'foo': 'abc', 'bar': 321}]
 
 
 def id_generator(size=6, chars=string.ascii_uppercase + string.digits):

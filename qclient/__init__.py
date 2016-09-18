@@ -178,7 +178,7 @@ class QClient(object):
         new_node = node if node.endswith('/') else node + '/'
         return new_node + 'qcache/dataset/' + key
 
-    def get(self, key, q, accept='application/json', post_query=False):
+    def get(self, key, q, accept='application/json', post_query=False, query_headers=None):
         """
         Execute query and return result.
 
@@ -186,6 +186,9 @@ class QClient(object):
         :param q: Dict with the query as described in the QCache documentation
         :param accept: Response type, application/json and text/csv are supported
         :param post_query: If set the query will be executed using a POST rather than GET. Good for very large queries.
+        :param query_headers: dict with additional headers to include when issuing query.
+                              Key - header name
+                              Value - header value
         :returns QueryResult: Contains the result of the query.
         :raises MalformedQueryException:
         :raises UnsupportedAcceptType:
@@ -195,19 +198,21 @@ class QClient(object):
         """
         json_q = json.dumps(q)
 
+        headers = {'Accept': accept}
+        if query_headers:
+            headers.update(query_headers)
+
         while True:
             node = self._node_for_key(key)
             key_url = self._key_url(node, key)
             with self._connection_error_manager(node):
                 if post_query:
-                    response = self.session.post(key_url + '/q', data=json_q,
-                                                 headers={'Accept': accept, 'Content-Type': 'application/json'},
-                                                 timeout=(self.connect_timeout, self.read_timeout), verify=self.verify,
-                                                 auth=self.auth)
+                    headers['Content-Type'] = 'application/json'
+                    response = self.session.post(key_url + '/q', data=json_q, headers=headers, auth=self.auth,
+                                                 timeout=(self.connect_timeout, self.read_timeout), verify=self.verify)
                 else:
-                    response = self.session.get(key_url, params={'q': json_q}, headers={'Accept': accept},
-                                                timeout=(self.connect_timeout, self.read_timeout), verify=self.verify,
-                                                auth=self.auth)
+                    response = self.session.get(key_url, params={'q': json_q}, headers=headers, auth=self.auth,
+                                                timeout=(self.connect_timeout, self.read_timeout), verify=self.verify)
 
                 if response.status_code == 200:
                     return QueryResult(response.content, int(response.headers['X-QCache-unsliced-length']))
@@ -264,7 +269,8 @@ class QClient(object):
                 raise UnexpectedServerResponse('Unable to create dataset, status code {status_code}'.format(
                     status_code=response.status_code))
 
-    def query(self, key, q, load_fn, load_fn_kwargs=None, content_type='text/csv', accept='application/json', post_headers=None, post_query=False):
+    def query(self, key, q, load_fn, load_fn_kwargs=None, content_type='text/csv', accept='application/json',
+              post_headers=None, post_query=False, query_headers=None):
         """
         Convenience method to query for data. If the requested key is not available in the QCache a call will
         be made to :load_fn: providing :load_fn_kwargs: as key value args. :load_fn: should return the data to
@@ -277,10 +283,13 @@ class QClient(object):
         :param load_fn_kwargs: Key-value arguments to load_fn
         :param content_type: application/json or text/csv depending on uploaded content
         :param accept: Response type, application/json and text/csv are supported
-        :param post_headers: dict with additional headers to include.
+        :param post_headers: dict with additional headers to include when pushing data to the caches.
                              Key - header name
                              Value - header value
         :param post_query: If set the query will be executed using a POST rather than GET. Good for very large queries.
+        :param query_headers: dict with additional headers to include when issuing query.
+                              Key - header name
+                              Value - header value
         :return: QueryResult: Contains the result of the query.
         :raises MalformedQueryException:
         :raises UnsupportedAcceptType:
@@ -291,7 +300,7 @@ class QClient(object):
         content = None
         try_count = 0
         while True:
-            result = self.get(key, q, accept, post_query)
+            result = self.get(key, q, accept, post_query, query_headers)
             if result is not None:
                 return result
 
