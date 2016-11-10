@@ -66,13 +66,17 @@ class QueryResult(object):
     :param content: A byte string containing the body received from the server.
     :param unsliced_result_len: contains the complete result length. If no slicing/pagination is applied this will equal the number of records returned.
     """
-    def __init__(self, content, unsliced_result_len):
+    def __init__(self, content, unsliced_result_len, encoding):
         self.content = content
         self.unsliced_result_len = unsliced_result_len
+        self.encoding = encoding
 
     def __repr__(self):
-        return "{class_name}(content={content}, unsliced_result_len={unsliced_result_len})".format(
-            class_name=self.__class__.__name__, content=self.content, unsliced_result_len=self.unsliced_result_len)
+        return "{class_name}(content={content}, unsliced_result_len={unsliced_result_len}, encoding={encoding})".format(
+            class_name=self.__class__.__name__,
+            content=self.content,
+            unsliced_result_len=self.unsliced_result_len,
+            encoding=self.encoding)
 
     __str__ = __repr__
 
@@ -215,7 +219,9 @@ class QClient(object):
                                                 timeout=(self.connect_timeout, self.read_timeout), verify=self.verify)
 
                 if response.status_code == 200:
-                    return QueryResult(response.content, int(response.headers['X-QCache-unsliced-length']))
+                    return QueryResult(response.content,
+                                       int(response.headers['X-QCache-unsliced-length']),
+                                       encoding=response.headers.get('Content-Encoding'))
 
                 if response.status_code == 404:
                     return None

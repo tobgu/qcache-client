@@ -8,7 +8,7 @@ from qclient import QClient, NoCacheAvailable, NodeRing, TooManyConsecutiveError
 
 
 # Version to test against
-QCACHE_VERSION = '0.6.1'
+QCACHE_VERSION = '0.7.0'
 
 
 def data_source(content):
@@ -80,6 +80,15 @@ def test_basic_query_using_post_with_no_prior_data(qcache_factory):
 
     result_data = json.loads(result.content.decode('utf8'))
     assert result_data == [{'foo': 'baz', 'bar': 123}]
+
+
+def test_query_using_compression(qcache_factory):
+    qcache_factory.spawn_caches('2222')
+    client = QClient(['http://localhost:2222'])
+    result = client.query('test_key', q={}, load_fn=data_source, content_type='application/json',
+                          load_fn_kwargs=dict(content='baz'), query_headers={'Accept-Encoding': 'lz4,gzip'})
+
+    assert result.encoding == 'lz4'
 
 
 def test_circuit_breaker_kicks_in_after_too_many_failures(qcache_factory):
