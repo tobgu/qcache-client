@@ -5,6 +5,7 @@ from requests.exceptions import ConnectionError, ConnectTimeout, ReadTimeout, Re
 from qclient.node_ring import NodeRing
 from collections import defaultdict
 
+__version__ = "0.4.1"
 
 class QClientException(Exception):
     """
@@ -65,6 +66,7 @@ class QueryResult(object):
 
     :param content: A byte string containing the body received from the server.
     :param unsliced_result_len: contains the complete result length. If no slicing/pagination is applied this will equal the number of records returned.
+    :param encoding: Content-Encoding as set by the server
     """
     def __init__(self, content, unsliced_result_len, encoding):
         self.content = content

@@ -1,6 +1,10 @@
 Changelog
 =========
 
+0.4.1 (2016-11-11)
+------------------
+* Include content encoding in the result object.
+
 0.4.0 (2016-09-18)
 ------------------
 * Support for custom headers when running queries. This allows use of the pandas filter engine

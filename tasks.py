@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 from invoke import task, run
+from qclient import __version__ as qclient_version
 
 docs_dir = 'docs'
 build_dir = os.path.join(docs_dir, '_build')
@@ -47,7 +48,7 @@ def build_docs(clean=False, browse=False):
 
 
 @task
-def readme(browse=False):
+def readme():
     run('rst2html.py README.rst > README.html')
 
 
@@ -58,3 +59,8 @@ def publish(test=False):
         run('python setup.py register -r pypitest sdist upload -r pypitest')
     else:
         run("python setup.py register sdist upload")
+
+
+@task
+def tag():
+    run("git tag -fa v{version} -m 'v{version}'".format(version=qclient_version))

@@ -15,12 +15,31 @@ def read(*names, **kwargs):
         encoding=kwargs.get("encoding", "utf8")
     ).read()
 
-__version__ = "0.4.0"
+
+def find_version(fname):
+    '''Attempts to find the version number in the file names fname.
+    Raises RuntimeError if not found.
+    '''
+    version = ''
+    with open(fname, 'r') as fp:
+        reg = re.compile(r'__version__ = [\'"]([^\'"]*)[\'"]')
+        for line in fp:
+            m = reg.match(line)
+            if m:
+                version = m.group(1)
+                break
+    if not version:
+        raise RuntimeError('Cannot find version information')
+    return version
+
+
+__version__ = find_version("qclient/__init__.py")
+
 
 setup(
     name="qcache-client",
     version=__version__,
-    license="BSD",
+    license="MIT",
     description="Python client library for QCache",
     long_description="%s\n%s" % (read("README.rst"), re.sub(":obj:`~?(.*?)`", r"``\1``", read("CHANGELOG.rst"))),
     author="Tobias Gustafsson",
