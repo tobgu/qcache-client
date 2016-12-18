@@ -8,7 +8,7 @@ from qclient import QClient, NoCacheAvailable, NodeRing, TooManyConsecutiveError
 
 
 # Version to test against
-QCACHE_VERSION = '0.7.0'
+QCACHE_VERSION = '0.7.1'
 
 
 def data_source(content):
@@ -125,10 +125,16 @@ def test_no_nodes_available(qcache_factory):
 
     # The exact behaviour seem to vary between platforms. Connection timout on Linux
     # Connection Error on MacOSX.
-    assert client.statistics['http://localhost:2222']['connect_timeout'] + \
-           client.statistics['http://localhost:2222']['connection_error'] == 1
-    assert client.statistics['http://localhost:2223']['connect_timeout'] + \
-           client.statistics['http://localhost:2223']['connection_error'] == 1
+    statistics = client.statistics
+    assert statistics['http://localhost:2222']['connect_timeout'] + \
+           statistics['http://localhost:2222']['connection_error'] == 1
+    assert statistics['http://localhost:2223']['connect_timeout'] + \
+           statistics['http://localhost:2223']['connection_error'] == 1
+    assert statistics is client.get_statistics()
+
+    # Statistics reset after getting it
+    assert len(client.get_statistics()) == 0
+
 
 
 def test_no_nodes_available_then_node_becomes_available_again(qcache_factory):

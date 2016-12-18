@@ -7,6 +7,7 @@ from collections import defaultdict
 
 __version__ = "0.4.1"
 
+
 class QClientException(Exception):
     """
     Base exception for all other exceptions raised in QClient
@@ -106,14 +107,18 @@ class QClient(object):
         self.failing_nodes = set()
         self.connect_timeout = connect_timeout
         self.read_timeout = read_timeout
-        self.statistics = defaultdict(_node_statisticts)
         self.check_interval = 10
-        self.post_count = 0
+        self.check_attempt_count = 0
         self.session = requests.session()
         self.verify = verify
         self.auth = auth
         self.consecutive_error_count = 0
         self.consecutive_error_count_limit = consecutive_error_count_limit
+        self.statistics = None
+        self._clear_statistics()
+
+    def _clear_statistics(self):
+        self.statistics = defaultdict(_node_statisticts)
 
     def _node_for_key(self, key):
         node = self.node_ring.get_node(key)
@@ -133,7 +138,7 @@ class QClient(object):
         for node in list(self.failing_nodes):
             status_url = self._status_url(node)
             try:
-                response = self.session.get(status_url, verify=self.verify, auth=self.auth)
+                response = self.session.get(status_url, verify=self.verify, auth=self.auth, timeout=(self.connect_timeout, self.read_timeout))
                 if response.status_code == 200:
                     self.node_ring.add_node(node)
                     self.failing_nodes.remove(node)
@@ -146,10 +151,10 @@ class QClient(object):
         self.failing_nodes.add(node)
 
     def _check_dropped_nodes(self):
-        if self.post_count % self.check_interval == 0:
+        if self.check_attempt_count % self.check_interval == 0:
             self._test_dropped_nodes()
 
-        self.post_count += 1
+        self.check_attempt_count += 1
 
     @contextmanager
     def _connection_error_manager(self, node):
@@ -184,6 +189,11 @@ class QClient(object):
         new_node = node if node.endswith('/') else node + '/'
         return new_node + 'qcache/dataset/' + key
 
+    def get_statistics(self):
+        statistics = self.statistics
+        self._clear_statistics()
+        return statistics
+
     def get(self, key, q, accept='application/json', post_query=False, query_headers=None):
         """
         Execute query and return result.
@@ -202,6 +212,7 @@ class QClient(object):
         :raises TooManyConsecutiveErrors:
         :raises NoCacheAvailable:
         """
+        self._check_dropped_nodes()
         json_q = json.dumps(q)
 
         headers = {'Accept': accept}
@@ -254,9 +265,6 @@ class QClient(object):
         :raises TooManyConsecutiveErrors:
         :raises NoCacheAvailable:
         """
-        # Checking of nodes that have previously been dropped is only done when inserting
-        # new data right now. Rationale: If we have successful gets then there is no reason
-        # to redistribute any data.
         self._check_dropped_nodes()
 
         while True:
