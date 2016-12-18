@@ -1,6 +1,11 @@
 Changelog
 =========
 
+0.4.2 (2016-12-18)
+------------------
+* Check dropped nodes also on get, not only post.
+* Make connection stats public and resettable.
+
 0.4.1 (2016-11-11)
 ------------------
 * Include content encoding in the result object.

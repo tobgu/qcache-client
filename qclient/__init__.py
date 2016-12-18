@@ -5,7 +5,7 @@ from requests.exceptions import ConnectionError, ConnectTimeout, ReadTimeout, Re
 from qclient.node_ring import NodeRing
 from collections import defaultdict
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 
 
 class QClientException(Exception):
