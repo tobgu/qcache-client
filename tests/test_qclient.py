@@ -31,7 +31,7 @@ def qcache_factory():
                         "run",
                         "--net=host",
                         "-p", "{port}:{port}".format(port=port),
-                        "-v", "{dir}:/certs".format(dir=os.path.dirname(os.path.abspath(__file__))),
+                        "-v", "{dir}:/certs".format(dir=os.path.dirname(os.path.abspath(__file__)) + '/../tls'),
                         "--rm",
                         "--name", name,
                         "tobgu/qcache:{version}".format(version=QCACHE_VERSION),
@@ -136,7 +136,6 @@ def test_no_nodes_available(qcache_factory):
     assert len(client.get_statistics()) == 0
 
 
-
 def test_no_nodes_available_then_node_becomes_available_again(qcache_factory):
     client = QClient(['http://localhost:2222', 'http://localhost:2223'])
     with pytest.raises(NoCacheAvailable):
@@ -211,7 +210,7 @@ def test_delete(qcache_factory):
 def test_https(qcache_factory):
     qcache_factory.spawn_caches('2222', certfile='host.pem')
     nodes = ['https://localhost:2222']
-    client = QClient(nodes, verify='tests/rootCA.crt')
+    client = QClient(nodes, verify='tls/ca.pem')
     content = data_source('foo')
     key = '12345'
 
@@ -225,7 +224,7 @@ def test_https(qcache_factory):
 def test_https_with_basic_auth(qcache_factory):
     qcache_factory.spawn_caches('2222', certfile='host.pem', auth='abc:123')
     nodes = ['https://localhost:2222']
-    client = QClient(nodes, verify='tests/rootCA.crt', auth=('abc', '123'))
+    client = QClient(nodes, verify='tls/ca.pem', auth=('abc', '123'))
     content = data_source('foo')
     key = '12345'
 
