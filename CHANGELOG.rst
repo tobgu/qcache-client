@@ -1,6 +1,10 @@
 Changelog
 =========
 
+0.5.0 (2017-01-08)
+------------------
+* Support TLS client certificate verification
+
 0.4.2 (2016-12-18)
 ------------------
 * Check dropped nodes also on get, not only post.
