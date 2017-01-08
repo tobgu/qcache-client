@@ -102,16 +102,25 @@ class QClient(object):
     :param consecutive_error_count_limit: Number of times to retry operations before giving up.
     """
 
-    def __init__(self, node_list, connect_timeout=1.0, read_timeout=2.0, verify=True, auth=None, consecutive_error_count_limit=10):
+    def __init__(self,
+                 node_list,
+                 connect_timeout=1.0,
+                 read_timeout=2.0,
+                 verify=True,
+                 cert=None,
+                 auth=None,
+                 consecutive_error_count_limit=10):
         self.node_ring = NodeRing(node_list)
+
+        self.session = requests.session()
+        self.session.cert = cert
+        self.session.verify = verify
+        self.session.auth = auth
+        self.session.timeout = (connect_timeout, read_timeout)
+
         self.failing_nodes = set()
-        self.connect_timeout = connect_timeout
-        self.read_timeout = read_timeout
         self.check_interval = 10
         self.check_attempt_count = 0
-        self.session = requests.session()
-        self.verify = verify
-        self.auth = auth
         self.consecutive_error_count = 0
         self.consecutive_error_count_limit = consecutive_error_count_limit
         self.statistics = None
@@ -138,7 +147,7 @@ class QClient(object):
         for node in list(self.failing_nodes):
             status_url = self._status_url(node)
             try:
-                response = self.session.get(status_url, verify=self.verify, auth=self.auth, timeout=(self.connect_timeout, self.read_timeout))
+                response = self.session.get(status_url)
                 if response.status_code == 200:
                     self.node_ring.add_node(node)
                     self.failing_nodes.remove(node)
@@ -225,11 +234,9 @@ class QClient(object):
             with self._connection_error_manager(node):
                 if post_query:
                     headers['Content-Type'] = 'application/json'
-                    response = self.session.post(key_url + '/q', data=json_q, headers=headers, auth=self.auth,
-                                                 timeout=(self.connect_timeout, self.read_timeout), verify=self.verify)
+                    response = self.session.post(key_url + '/q', data=json_q, headers=headers)
                 else:
-                    response = self.session.get(key_url, params={'q': json_q}, headers=headers, auth=self.auth,
-                                                timeout=(self.connect_timeout, self.read_timeout), verify=self.verify)
+                    response = self.session.get(key_url, params={'q': json_q}, headers=headers)
 
                 if response.status_code == 200:
                     return QueryResult(response.content,
@@ -275,9 +282,10 @@ class QClient(object):
                 headers.update(post_headers)
 
             with self._connection_error_manager(node):
-                response = self.session.post(key_url, headers=headers, data=content,
-                                             timeout=(self.connect_timeout, 10 * self.read_timeout), verify=self.verify,
-                                             auth=self.auth)
+                # Allow for a longer read timeout when posting data since it generally
+                # takes longer than queries since there is more data to parse.
+                timeout = (self.session.timeout[0], 10 * self.session.timeout[1])
+                response = self.session.post(key_url, headers=headers, data=content, timeout=timeout)
                 if response.status_code == 201:
                     return
 
@@ -354,6 +362,5 @@ class QClient(object):
             node = self._node_for_key(key)
             key_url = self._key_url(node, key)
             with self._connection_error_manager(node):
-                self.session.delete(
-                    key_url, timeout=(self.connect_timeout, self.read_timeout), verify=self.verify, auth=self.auth)
+                self.session.delete(key_url)
                 return

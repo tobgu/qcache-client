@@ -4,11 +4,13 @@ import random
 import string
 import time
 import pytest
+import signal
+
 from qclient import QClient, NoCacheAvailable, NodeRing, TooManyConsecutiveErrors
 
 
 # Version to test against
-QCACHE_VERSION = '0.7.1'
+QCACHE_VERSION = '0.8.0'
 
 
 def data_source(content):
@@ -21,39 +23,73 @@ def qcache_factory():
     class QCacheFactory(object):
         def __init__(self):
             self.caches = set()
+            self.platform = 'docker'
 
         def spawn_caches(self, *ports, **kwargs):
-            names = []
-            for port in ports:
-                name = "qcache{port}".format(port=port)
-                names.append(name)
-                args = [os.P_NOWAIT, "docker", "docker",
-                        "run",
-                        "--net=host",
-                        "-p", "{port}:{port}".format(port=port),
-                        "-v", "{dir}:/certs".format(dir=os.path.dirname(os.path.abspath(__file__)) + '/../tls'),
-                        "--rm",
-                        "--name", name,
-                        "tobgu/qcache:{version}".format(version=QCACHE_VERSION),
-                        "qcache", "--port={port}".format(port=port)]
-                if 'certfile' in kwargs:
-                    args.append("--cert-file=/certs/%s" % kwargs['certfile'])
+            cert_dir = os.path.dirname(os.path.abspath(__file__)) + '/../tls'
+            self.platform = kwargs.get('platform', 'docker')
+            if self.platform == 'docker':
+                # Mainly for Travis and other systems where QCache is not installed
+                names = []
+                for port in ports:
+                    name = "qcache{port}".format(port=port)
+                    names.append(name)
+                    args = [os.P_NOWAIT, "docker", "docker",
+                            "run",
+                            "--net=host",
+                            "-p", "{port}:{port}".format(port=port),
+                            "-v", "{dir}:/certs".format(dir=cert_dir),
+                            "--rm",
+                            "--name", name,
+                            "tobgu/qcache:{version}".format(version=QCACHE_VERSION),
+                            "qcache", "--port={port}".format(port=port)]
 
-                if 'auth' in kwargs:
-                    args.append('--basic-auth=%s' % kwargs['auth'])
-                os.spawnlp(os.P_NOWAIT, "docker", "docker", "rm", "-f", name)
+                    if 'certfile' in kwargs:
+                        args.append("--cert-file=/certs/%s" % kwargs['certfile'])
+                    if 'cafile' in kwargs:
+                        args.append("--ca-file=/certs/%s" % kwargs['cafile'])
+                    if 'auth' in kwargs:
+                        args.append('--basic-auth=%s' % kwargs['auth'])
+
+                    os.spawnlp(os.P_NOWAIT, "docker", "docker", "rm", "-f", name)
+                    time.sleep(1.0)
+                    os.spawnlp(*args)
+
+                # Let the processes start
+                time.sleep(2.0)
+                self.caches.update(names)
+                return names
+            else:
+                # Mainly for local development
+                pids = []
+                for port in ports:
+                    args = [os.P_NOWAIT,
+                            "qcache", "qcache",
+                            "--port={port}".format(port=port)]
+
+                    if 'certfile' in kwargs:
+                        args.append("--cert-file=/%s/%s" % (cert_dir, kwargs['certfile']))
+                    if 'cafile' in kwargs:
+                        args.append("--ca-file=/%s/%s" % (cert_dir, kwargs['cafile']))
+                    if 'auth' in kwargs:
+                        args.append('--basic-auth=%s' % kwargs['auth'])
+
+                    pids.append(os.spawnlp(*args))
+
+                # Let the processes start
                 time.sleep(1.0)
-                os.spawnlp(*args)
-
-            # Let the processes start
-            time.sleep(2.0)
-            self.caches.update(names)
-            return names
+                self.caches.update(pids)
+                return pids
 
         def kill_caches(self, *names):
-            for name in names:
-                os.spawnlp(os.P_NOWAIT, "docker", "docker", "kill", "{name}".format(name=name))
-                self.caches.discard(name)
+            if self.platform == 'docker':
+                for name in names:
+                    os.spawnlp(os.P_NOWAIT, "docker", "docker", "kill", "{name}".format(name=name))
+                    self.caches.discard(name)
+            else:
+                for pid in names:
+                    os.kill(pid, signal.SIGTERM)
+
             time.sleep(1)
 
         def kill_all(self):
@@ -239,6 +275,23 @@ def test_https_with_basic_auth(qcache_factory):
 
     client.delete(key)
     assert client.get(key, q={}) is None
+
+
+def test_https_with_client_cert_verification(qcache_factory):
+    qcache_factory.spawn_caches('2222', certfile='host.pem', cafile='ca.pem')
+    client = QClient(['https://localhost:2222'], verify='tls/ca.pem', cert='tls/host.pem')
+
+    key = '12345'
+    client.post(key, data_source('foo'), content_type='application/json')
+    assert client.get(key, q={}) is not None
+
+
+def test_https_with_client_cert_verification_no_cert_presented(qcache_factory):
+    qcache_factory.spawn_caches('2222', certfile='host.pem', cafile='ca.pem')
+    client = QClient(['https://localhost:2222'], verify='tls/ca.pem')
+
+    with pytest.raises(NoCacheAvailable):
+        client.post("a", data_source('foo'), content_type='application/json')
 
 
 def data_source_csv():
