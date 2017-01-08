@@ -69,6 +69,12 @@ def data_source2(content):
                        {'foo': 'abc', 'bar': 321}])
 
 
+def test_warmup(qcache_factory):
+    # This test is just there fetch docker images, etc. before running the
+    # real tests. Travis seems to flake out otherwise.
+    qcache_factory.spawn_caches('2222')
+
+
 def test_basic_query_using_post_with_no_prior_data(qcache_factory):
     qcache_factory.spawn_caches('2222', '2223')
     client = QClient(['http://localhost:2222', 'http://localhost:2223'], read_timeout=1.0)
