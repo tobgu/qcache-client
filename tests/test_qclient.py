@@ -10,7 +10,7 @@ from qclient import QClient, NoCacheAvailable, NodeRing, TooManyConsecutiveError
 
 
 # Version to test against
-QCACHE_VERSION = '0.8.0'
+QCACHE_VERSION = 'dev'
 
 
 def data_source(content):
@@ -156,6 +156,10 @@ def test_basic_query_with_no_prior_data(qcache_factory):
 
     assert result_data == [{'foo': 'baz', 'bar': 123}, {'foo': 'abc', 'bar': 321}]
     assert 'baz' in str(result)
+    assert result.statistics['get_request_duration'] > 0.0
+    assert result.statistics['get_request_duration'] > result.statistics['get_shard_execution_duration']
+    assert result.statistics['insert_request_duration'] > 0
+    assert result.statistics['insert_request_duration'] > result.statistics['insert_shard_execution_duration']
 
 
 def test_no_nodes_available(qcache_factory):

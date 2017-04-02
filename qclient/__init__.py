@@ -5,7 +5,7 @@ from requests.exceptions import ConnectionError, ConnectTimeout, ReadTimeout, Re
 from qclient.node_ring import NodeRing
 from collections import defaultdict
 
-__version__ = "0.5.0"
+__version__ = "0.5.0dev"
 
 
 class QClientException(Exception):
@@ -69,10 +69,14 @@ class QueryResult(object):
     :param unsliced_result_len: contains the complete result length. If no slicing/pagination is applied this will equal the number of records returned.
     :param encoding: Content-Encoding as set by the server
     """
-    def __init__(self, content, unsliced_result_len, encoding):
-        self.content = content
-        self.unsliced_result_len = unsliced_result_len
-        self.encoding = encoding
+    def __init__(self, response):
+        self.content = response.content
+        self.unsliced_result_len = int(response.headers['X-QCache-unsliced-length'])
+        self.encoding = response.headers.get('Content-Encoding')
+        self.statistics = get_request_statistics(response)
+
+    def add_stats(self, stats):
+        self.statistics.update(stats)
 
     def __repr__(self):
         return "{class_name}(content={content}, unsliced_result_len={unsliced_result_len}, encoding={encoding})".format(
@@ -82,6 +86,14 @@ class QueryResult(object):
             encoding=self.encoding)
 
     __str__ = __repr__
+
+
+def get_request_statistics(response, prefix="get_"):
+    stats_header = response.headers.get('X-QCache-stats')
+    if stats_header:
+        return {prefix + k.strip(): float(v) for k, v in dict(t.split('=') for t in stats_header.split(',')).items()}
+
+    return {}
 
 
 class QClient(object):
@@ -239,9 +251,7 @@ class QClient(object):
                     response = self.session.get(key_url, params={'q': json_q}, headers=headers)
 
                 if response.status_code == 200:
-                    return QueryResult(response.content,
-                                       int(response.headers['X-QCache-unsliced-length']),
-                                       encoding=response.headers.get('Content-Encoding'))
+                    return QueryResult(response)
 
                 if response.status_code == 404:
                     return None
@@ -287,7 +297,7 @@ class QClient(object):
                 timeout = (self.session.timeout[0], 10 * self.session.timeout[1])
                 response = self.session.post(key_url, headers=headers, data=content, timeout=timeout)
                 if response.status_code == 201:
-                    return
+                    return get_request_statistics(response, prefix="insert_")
 
                 self.statistics[node]['unknown_error'] += 1
                 raise UnexpectedServerResponse('Unable to create dataset, status code {status_code}'.format(
@@ -323,9 +333,11 @@ class QClient(object):
         """
         content = None
         try_count = 0
+        post_stats = {}
         while True:
             result = self.get(key, q, accept, post_query, query_headers)
             if result is not None:
+                result.add_stats(post_stats)
                 return result
 
             try_count += 1
@@ -337,7 +349,7 @@ class QClient(object):
                 kwargs = load_fn_kwargs or {}
                 content = load_fn(**kwargs)
 
-            self.post(key, content, content_type=content_type, post_headers=post_headers)
+            post_stats = self.post(key, content, content_type=content_type, post_headers=post_headers)
 
     def delete(self, key):
         """

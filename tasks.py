@@ -9,7 +9,7 @@ build_dir = os.path.join(docs_dir, '_build')
 
 @task
 def test():
-    run('python -m pytest -s', pty=True)
+    run('python -m pytest -s -v', pty=True)
 
 
 @task
