@@ -5,7 +5,7 @@ from requests.exceptions import ConnectionError, ConnectTimeout, ReadTimeout, Re
 from qclient.node_ring import NodeRing
 from collections import defaultdict
 
-__version__ = "0.5.0dev"
+__version__ = "0.5.1"
 
 
 class QClientException(Exception):
@@ -262,8 +262,8 @@ class QClient(object):
                 elif response.status_code == 406:
                     raise UnsupportedAcceptType('Accept type "{accept}" is not supported'.format(accept))
                 else:
-                    raise UnexpectedServerResponse('Unable to query dataset, status code {status_code}'.format(
-                        status_code=response.status_code))
+                    raise UnexpectedServerResponse('Unable to query dataset, status code {status_code}, content "{content}'.format(
+                        status_code=response.status_code, content=response.content))
 
     def post(self, key, content, content_type='text/csv', post_headers=None):
         """
@@ -300,8 +300,8 @@ class QClient(object):
                     return get_request_statistics(response, prefix="insert_")
 
                 self.statistics[node]['unknown_error'] += 1
-                raise UnexpectedServerResponse('Unable to create dataset, status code {status_code}'.format(
-                    status_code=response.status_code))
+                raise UnexpectedServerResponse('Unable to create dataset, status code {status_code}, content "{content}"'.format(
+                    status_code=response.status_code, content=response.content))
 
     def query(self, key, q, load_fn, load_fn_kwargs=None, content_type='text/csv', accept='application/json',
               post_headers=None, post_query=False, query_headers=None):

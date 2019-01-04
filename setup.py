@@ -61,6 +61,7 @@ setup(
         "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3.4",
         "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: Implementation :: PyPy",
         "Topic :: Utilities",
     ],
@@ -68,7 +69,7 @@ setup(
         # eg: "keyword1", "keyword2", "keyword3",
     ],
     install_requires=[
-        "requests>=2.7.0"
+        "requests>=2.20.0"
     ],
     extras_require={
         # eg: 'rst': ["docutils>=0.11"],

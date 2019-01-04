@@ -6,11 +6,12 @@ import time
 import pytest
 import signal
 
-from qclient import QClient, NoCacheAvailable, NodeRing, TooManyConsecutiveErrors
+import requests
 
+from qclient import QClient, NoCacheAvailable, NodeRing, TooManyConsecutiveErrors, UnexpectedServerResponse
 
 # Version to test against
-QCACHE_VERSION = 'dev'
+QCACHE_VERSION = '0.8.1'
 
 
 def data_source(content):
@@ -25,9 +26,28 @@ def qcache_factory():
             self.caches = set()
             self.platform = 'docker'
 
+        @staticmethod
+        def wait_qcaches(protocol="http", *ports):
+            for port in ports:
+                attempt = 0
+                while True:
+                    try:
+                        resp = requests.get("{protocol}://localhost:{port}/qcache/status".format(protocol=protocol, port=port), timeout=(1.0, 1.0))
+                        if resp.status_code == 200:
+                            return
+                        print("Unexpected response code waiting for qcache: {code}".format(code=resp.status_code))
+                    except Exception:
+                        if attempt > 5:
+                            print("QCache at port {port} not reachable".format(port=port))
+                            return
+
+                        time.sleep(1.0)
+                        attempt += 1
+
         def spawn_caches(self, *ports, **kwargs):
             cert_dir = os.path.dirname(os.path.abspath(__file__)) + '/../tls'
             self.platform = kwargs.get('platform', 'docker')
+            protocol = "https" if 'certfile' in kwargs else "http"
             if self.platform == 'docker':
                 # Mainly for Travis and other systems where QCache is not installed
                 names = []
@@ -37,7 +57,6 @@ def qcache_factory():
                     args = [os.P_NOWAIT, "docker", "docker",
                             "run",
                             "--net=host",
-                            "-p", "{port}:{port}".format(port=port),
                             "-v", "{dir}:/certs".format(dir=cert_dir),
                             "--rm",
                             "--name", name,
@@ -56,7 +75,7 @@ def qcache_factory():
                     os.spawnlp(*args)
 
                 # Let the processes start
-                time.sleep(2.0)
+                self.wait_qcaches(protocol, *ports)
                 self.caches.update(names)
                 return names
             else:
@@ -77,7 +96,7 @@ def qcache_factory():
                     pids.append(os.spawnlp(*args))
 
                 # Let the processes start
-                time.sleep(1.0)
+                self.wait_qcaches(protocol, *ports)
                 self.caches.update(pids)
                 return pids
 
@@ -156,14 +175,9 @@ def test_basic_query_with_no_prior_data(qcache_factory):
 
     assert result_data == [{'foo': 'baz', 'bar': 123}, {'foo': 'abc', 'bar': 321}]
     assert 'baz' in str(result)
-    assert result.statistics['get_request_duration'] > 0.0
-    assert result.statistics['get_request_duration'] > result.statistics['get_shard_execution_duration']
-    assert result.statistics['insert_request_duration'] > 0
-    assert result.statistics['insert_request_duration'] > result.statistics['insert_shard_execution_duration']
 
 
-def test_no_nodes_available(qcache_factory):
-    qcache_factory.kill_caches('2222', '2223')
+def test_no_nodes_available():
     client = QClient(['http://localhost:2222', 'http://localhost:2223'])
     with pytest.raises(NoCacheAvailable):
         client.query('test_key', q=dict(select=['foo', 'bar']), load_fn=data_source,
@@ -237,6 +251,16 @@ def test_one_node_unavailable_then_appears(qcache_factory):
     qcache_factory.kill_caches(*names1)
     assert client.get(key, q={}) is not None
     assert client.statistics['http://localhost:2223']['resurrections']
+
+
+def test_post_with_invalid_content(qcache_factory):
+    qcache_factory.spawn_caches('2222')
+    client = QClient(['http://localhost:2222'], read_timeout=1.0)
+    with pytest.raises(UnexpectedServerResponse) as e:
+        client.post("test-key", "non-expected-json", content_type='application/json')
+
+    assert "Internal Server Error" in str(e)
+    assert "code 500" in str(e)
 
 
 def test_delete(qcache_factory):
