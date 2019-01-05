@@ -11,7 +11,7 @@ import requests
 from qclient import QClient, NoCacheAvailable, NodeRing, TooManyConsecutiveErrors, UnexpectedServerResponse
 
 # Version to test against
-QCACHE_VERSION = '0.8.1'
+QCACHE_VERSION = '0.9.3'
 
 
 def data_source(content):
@@ -177,7 +177,10 @@ def test_basic_query_with_no_prior_data(qcache_factory):
     assert 'baz' in str(result)
 
 
-def test_no_nodes_available():
+def test_no_nodes_available(qcache_factory):
+    if qcache_factory.platform == "docker":
+        qcache_factory.kill_caches('2222', '3333')
+
     client = QClient(['http://localhost:2222', 'http://localhost:2223'])
     with pytest.raises(NoCacheAvailable):
         client.query('test_key', q=dict(select=['foo', 'bar']), load_fn=data_source,
