@@ -1,6 +1,11 @@
 Changelog
 =========
 
+0.5.1 (2019-01-06)
+------------------
+* Include response content in cases of unexpected responses for easier debugging.
+* Expose "trust_env" as a client constructor parameter to improve performance.
+
 0.5.0 (2017-01-08)
 ------------------
 * Support TLS client certificate verification
