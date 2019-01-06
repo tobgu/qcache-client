@@ -112,6 +112,9 @@ class QClient(object):
     :param verify: If https is used controls if the host certificate should be verified.
     :param auth: Tuple (username, password), used for basic auth.
     :param consecutive_error_count_limit: Number of times to retry operations before giving up.
+    :param trust_env: Whether to pick up proxies etc. from environment variables etc. Setting this
+                      to False will cut request latency by 5-6ms because of less processing required in
+                      the requests library.
     """
 
     def __init__(self,
@@ -121,7 +124,8 @@ class QClient(object):
                  verify=True,
                  cert=None,
                  auth=None,
-                 consecutive_error_count_limit=10):
+                 consecutive_error_count_limit=10,
+                 trust_env=True):
         self.node_ring = NodeRing(node_list)
 
         self.session = requests.session()
@@ -129,6 +133,7 @@ class QClient(object):
         self.session.verify = verify
         self.session.auth = auth
         self.session.timeout = (connect_timeout, read_timeout)
+        self.session.trust_env = trust_env
 
         self.failing_nodes = set()
         self.check_interval = 10
